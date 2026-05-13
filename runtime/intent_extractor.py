@@ -18,7 +18,7 @@ class QualificationFacts(BaseModel):
 class IntentExtraction(BaseModel):
     is_asking_for_vehicle: bool = Field(..., description="True apenas se o lead está pedindo para ver opções de veículos, preços ou características do estoque.")
     vehicle_query: Optional[str] = Field(None, description="O briefing de busca, se is_asking_for_vehicle=True. Ex: 'SUV automática' ou 'Gol 2022'.")
-    is_asking_for_photos: bool = Field(..., description="True se o lead pediu fotos/imagens explicitamente.")
+    is_asking_for_photos: bool = Field(..., description="True APENAS se o lead pediu para RECEBER fotos do nosso estoque. False se o lead está enviando ou oferecendo fotos do carro dele.")
     is_accepting_info: bool = Field(..., description="True se o lead está aceitando/confirmando receber informações (ex: 'pode sim', 'claro', 'manda', 'quero saber', 'show'). False se está fazendo uma pergunta nova ou dando informação.")
     wants_human: bool = Field(..., description="True se o lead exigir um humano, gerente, ou estiver muito irritado.")
     qualification_facts: QualificationFacts = Field(default_factory=QualificationFacts)
@@ -44,6 +44,10 @@ SELEÇÃO DE OPÇÕES:
 Se o agente apresentou várias opções (ex: HB20 2017 e HB20 2015) e o lead escolheu uma ou pediu fotos ("desse 2015", "do automático", "do mais barato"):
 1. Preencha o `vehicle_query` com a referência completa do modelo escolhido (ex: "HB20 2015", "HB20 Automático").
 2. Se o lead pedir fotos, marque `is_asking_for_photos=True`.
+
+REGRAS PARA FOTOS:
+- Se o lead diz 'tem fotos?', 'manda fotos', 'quero ver as fotos desse': is_asking_for_photos=True.
+- Se o lead diz 'vou mandar as fotos', 'já te envio as fotos', 'já encaminho as imagens': is_asking_for_photos=False (ele está enviando, não pedindo).
 
 Sua extração será usada pelo Runtime do sistema apenas para carregar o contexto antes da resposta do Vendedor.
 """

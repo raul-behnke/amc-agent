@@ -123,9 +123,13 @@ def registrar_estado(
     if nome is not None:
         invalid_names = ["não informado", "desconhecido", "cliente", "lead", "n/a", "não"]
         if str(nome).lower().strip() not in invalid_names:
-            lead.nome = nome
-            updates["nome"] = nome
-            _register_answer(lead, "nome", nome)
+            # Proteção: Não sobrescreve um nome completo por um primeiro nome parcial
+            current_name = str(lead.nome or "").lower().strip()
+            new_name = str(nome).lower().strip()
+            if not (current_name and new_name in current_name and len(new_name) < len(current_name)):
+                lead.nome = nome
+                updates["nome"] = nome
+                _register_answer(lead, "nome", nome)
         else:
             logger.warning("Tentativa de registrar nome inválido: {name}", name=nome)
     if interesse is not None:
@@ -133,9 +137,13 @@ def registrar_estado(
         updates["interesse"] = interesse
         _register_answer(lead, "interesse", interesse)
     if intencao is not None:
-        lead.intencao = intencao
-        updates["intencao"] = intencao
-        _register_answer(lead, "intencao", intencao)
+        # Proteção similar: não regredir de "troca de Gol 1998" para "troca de Gol"
+        current_i = str(lead.intencao or "").lower().strip()
+        new_i = str(intencao).lower().strip()
+        if not (current_i and new_i in current_i and len(new_i) < len(current_i)):
+            lead.intencao = intencao
+            updates["intencao"] = intencao
+            _register_answer(lead, "intencao", intencao)
     if motivacao is not None:
         lead.motivacao = motivacao
         updates["motivacao"] = motivacao
@@ -181,9 +189,14 @@ def registrar_estado(
         updates["tem_troca"] = tem_troca
         _register_answer(lead, "tem_troca", tem_troca)
     if veiculo_troca is not None:
-        lead.veiculo_troca = veiculo_troca
-        updates["veiculo_troca"] = veiculo_troca
-        _register_answer(lead, "veiculo_troca", veiculo_troca)
+        # Proteção: Não sobrescreve "Gol 1998" por apenas "Gol"
+        current_v = str(lead.veiculo_troca or "").lower().strip()
+        new_v = str(veiculo_troca).lower().strip()
+        # Só atualiza se o novo valor não for apenas uma parte menos detalhada do atual
+        if not (current_v and new_v in current_v and len(new_v) < len(current_v)):
+            lead.veiculo_troca = veiculo_troca
+            updates["veiculo_troca"] = veiculo_troca
+            _register_answer(lead, "veiculo_troca", veiculo_troca)
     if motivo_troca is not None:
         lead.motivo_troca = motivo_troca
         updates["motivo_troca"] = motivo_troca
