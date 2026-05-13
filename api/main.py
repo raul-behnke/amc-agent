@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from loguru import logger
 from fastapi.staticfiles import StaticFiles
+from services.logging import configure_logging
 
 # Garantir que a raiz do projeto esteja no path
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -22,7 +23,7 @@ sys.path.insert(0, str(ROOT_DIR))
 load_dotenv(ROOT_DIR / ".env")
 
 # Configuração do logger
-logger.add("logs/app.log", rotation="10 MB", level="INFO")
+configure_logging()
 
 
 @asynccontextmanager

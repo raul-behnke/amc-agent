@@ -17,8 +17,9 @@ from services.ghl import (
     has_tag,
     send_message_async,
 )
+from services.logging import log_agent_message, log_lead_message
 from services.transcription import transcrever_audio_ghl
-from tools.qualification import _get_lead, registrar_qualificacao
+from tools.qualification import _get_lead, registrar_estado, registrar_qualificacao
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
@@ -87,6 +88,11 @@ async def _run_agent_and_respond(
         messages_to_send = _build_outbound_messages(reply_text, attachments)
         if not messages_to_send:
             return
+
+        preview_lines = [msg["text"] for msg in messages_to_send if msg["text"]]
+        if attachments:
+            preview_lines.insert(0, f"[attachments={len(attachments)}]")
+        log_agent_message(session_id, " ||| ".join(preview_lines)[:500] or "[mensagem sem texto]")
 
         # 3. Enviar sequencialmente com delay humano
         for i, msg in enumerate(messages_to_send):
@@ -180,6 +186,8 @@ async def _handle_chat_webhook_background(
             logger.warning("Mensagem vazia após pré-processamento | session={session}", session=session_id)
             return
 
+        log_lead_message(session_id, message_text[:500])
+
         lead = _get_lead(session_id)
         if veiculo_payload and not lead.veiculo_interesse:
             registrar_qualificacao(session_id=session_id, veiculo_interesse=veiculo_payload)
@@ -211,7 +219,13 @@ async def _handle_greeting_webhook_background(
 ) -> None:
     try:
         if veiculo:
-            registrar_qualificacao(session_id=contact_id, veiculo_interesse=veiculo)
+            registrar_estado(
+                session_id=contact_id,
+                veiculo_interesse=veiculo,
+                greeting_vehicle=veiculo,
+                vehicle_focus_current=veiculo,
+                qualification_target_vehicle=veiculo,
+            )
 
         resolved_conversation_id = await _resolve_conversation_id(contact_id, conversation_id)
         await _run_agent_and_respond(

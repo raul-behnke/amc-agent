@@ -20,10 +20,48 @@ from loguru import logger
 from agents.lucas import create_lucas_agent
 from services.ghl import get_messages_async
 from tools.qualification import _get_lead, registrar_qualificacao, registrar_estado
-from tools.inventory import consultar_estoque, get_vehicle_photo_urls
+from tools.inventory import consultar_estoque, detect_vehicle_mentions, get_vehicle_photo_urls, resolve_vehicle_target
 from runtime.intent_extractor import extract_intent_from_message
 
 INITIAL_GREETING_MARKER = "[SAUDAÇÃO INICIAL]"
+
+
+def _normalize_vehicle_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (value or "").lower())
+
+
+def _extract_query_tokens(search_query: str) -> set[str]:
+    normalized = _normalize_vehicle_text(search_query)
+    tokens = {w.lower() for w in re.findall(r"\w+", search_query) if len(w) >= 3}
+    if normalized and len(normalized) >= 3:
+        tokens.add(normalized)
+    return tokens
+
+
+def _is_exact_model_match(search_query: str, vehicle: dict) -> bool:
+    query_tokens = _extract_query_tokens(search_query)
+    if not query_tokens:
+        return False
+
+    modelo = str(vehicle.get("modelo", "")).lower()
+    marca = str(vehicle.get("marca", "")).lower()
+    modelo_norm = _normalize_vehicle_text(modelo)
+    marca_norm = _normalize_vehicle_text(marca)
+    modelo_words = {w for w in re.findall(r"\w+", modelo) if len(w) >= 3}
+    marca_words = {w for w in re.findall(r"\w+", marca) if len(w) >= 3}
+    if modelo_norm and len(modelo_norm) >= 3:
+        modelo_words.add(modelo_norm)
+    if marca_norm and len(marca_norm) >= 3:
+        marca_words.add(marca_norm)
+
+    query_model_words = query_tokens - marca_words
+    if query_model_words and (query_model_words & modelo_words):
+        return True
+    if modelo_norm and any(token == modelo_norm or token.endswith(modelo_norm) or modelo_norm.endswith(token) for token in query_model_words):
+        return True
+    if not query_model_words and (query_tokens & marca_words):
+        return True
+    return False
 
 
 def _detect_unanswered(ghl_messages: list[dict]) -> list[str]:
@@ -108,33 +146,10 @@ def _filter_stock_by_model(estoque_raw: str, search_query: str) -> str:
     if not matches:
         return f"O SISTEMA BUSCOU ESTOQUE PARA '{search_query}'. NENHUM VEÍCULO ENCONTRADO."
 
-    # Extrair palavras significativas da busca (ignorar palavras curtas)
-    query_words = {w.lower() for w in re.findall(r"\w+", search_query) if len(w) >= 3}
-
     # Identificar matches do modelo exato
     exact_model_matches = []
     for m in matches:
-        modelo = str(m.get("modelo", "")).lower()
-        marca = str(m.get("marca", "")).lower()
-        
-        # O match exato deve ser prioritariamente no MODELO. 
-        # Se a query contém apenas a marca (ex: 'Chevrolet'), vai dar match em todos. 
-        # Mas se for 'Chevrolet Ipanema', Cruze não deve dar match só pela marca.
-        modelo_words = {w for w in re.findall(r"\w+", modelo) if len(w) >= 3}
-        marca_words = {w for w in re.findall(r"\w+", marca) if len(w) >= 3}
-        
-        # Removemos a marca das palavras da query para ver se sobra algo do modelo
-        query_model_words = query_words - marca_words
-        
-        is_exact_match = False
-        if query_model_words and (query_model_words & modelo_words):
-            # Se tem palavras específicas do modelo na query e elas dão match no modelo
-            is_exact_match = True
-        elif not query_model_words and (query_words & marca_words):
-            # Se a query for APENAS a marca (ex: "Chevrolet")
-            is_exact_match = True
-            
-        if is_exact_match:
+        if _is_exact_model_match(search_query, m):
             exact_model_matches.append(m)
 
     if exact_model_matches:
@@ -167,6 +182,66 @@ def _filter_stock_by_model(estoque_raw: str, search_query: str) -> str:
             f"MAS APRESENTE ESTAS 3 MELHORES ALTERNATIVAS ABAIXO PARA MANTER O INTERESSE.\n{filtered_json}"
         )
 
+
+def _filter_stock_payload(estoque_raw: str, search_query: str) -> dict | None:
+    try:
+        data = json.loads(estoque_raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+    matches = data.get("matches", [])
+    if not matches:
+        return data
+
+    exact_model_matches = []
+    for match in matches:
+        if _is_exact_model_match(search_query, match):
+            exact_model_matches.append(match)
+
+    filtered = dict(data)
+    if exact_model_matches:
+        filtered["matches"] = exact_model_matches
+        filtered["count"] = len(exact_model_matches)
+        return filtered
+
+    filtered["matches"] = matches[:3]
+    filtered["count"] = len(matches[:3])
+    return filtered
+
+
+def _build_stock_injection(filtered_payload: dict | None, search_query: str, fallback_raw: str) -> str:
+    if not filtered_payload:
+        return f"O SISTEMA BUSCOU ESTOQUE PARA '{search_query}'. RESULTADO:\n{fallback_raw}"
+
+    matches = filtered_payload.get("matches", [])
+    if not matches:
+        return f"O SISTEMA BUSCOU ESTOQUE PARA '{search_query}'. NENHUM VEÍCULO ENCONTRADO."
+
+    filtered_json = json.dumps(filtered_payload, ensure_ascii=False)
+    if len(matches) == 1:
+        return (
+            f"O SISTEMA ENCONTROU EXATAMENTE 1 UNIDADE DE '{search_query}' NO ESTOQUE. "
+            f"APRESENTE APENAS ESTE VEÍCULO. NÃO SUGIRA ALTERNATIVAS.\n{filtered_json}"
+        )
+
+    exact_titles = {
+        str(item.get("modelo", "")).lower().strip()
+        for item in matches
+        if str(item.get("modelo", "")).strip()
+    }
+    query_lower = search_query.lower().strip()
+    if any(model and model in query_lower for model in exact_titles):
+        return (
+            f"O SISTEMA ENCONTROU {len(matches)} UNIDADES DE '{search_query}' NO ESTOQUE. "
+            f"APRESENTE TODAS AS OPÇÕES DESTE MODELO.\n{filtered_json}"
+        )
+
+    return (
+        f"O SISTEMA BUSCOU POR '{search_query}', MAS NÃO ENCONTROU O MODELO EXATO. "
+        f"INFORME AO LEAD QUE NÃO TEMOS O MODELO ESPECÍFICO DISPONÍVEL NO MOMENTO, "
+        f"MAS APRESENTE ESTAS 3 MELHORES ALTERNATIVAS ABAIXO PARA MANTER O INTERESSE.\n{filtered_json}"
+    )
+
 def _build_session_context(session_id: str) -> str:
     lead = _get_lead(session_id)
     state_payload = lead.to_dict()
@@ -174,6 +249,17 @@ def _build_session_context(session_id: str) -> str:
     context_lines = [
         "[CONTEXTO SESSAO]",
         f"LEAD_STATUS_ATUAL={lead.status.value}",
+        f"VEICULO_INTERESSE_ATUAL={lead.veiculo_interesse}",
+        f"VEICULO_TROCA_ATUAL={lead.veiculo_troca}",
+        f"KM_TROCA_ATUAL={lead.km_troca}",
+        f"QUITADO_TROCA_ATUAL={lead.quitado_troca}",
+        f"ESTADO_TROCA_ATUAL={lead.estado_troca}",
+        f"FOTOS_TROCA_RECEBIDAS_ATUAL={lead.fotos_troca_recebidas}",
+        f"PRECISA_FINANCIAMENTO_ATUAL={lead.precisa_financiamento}",
+        f"VEICULO_SAUDACAO={lead.vehicle_journey.greeting_vehicle}",
+        f"VEICULO_FOCO_ATUAL={lead.vehicle_journey.current_focus}",
+        f"VEICULO_SOLICITADO_NESTE_TURNO={lead.vehicle_journey.current_request}",
+        f"VEICULO_ALVO_FOTOS={lead.vehicle_journey.photo_target}",
         f"SESSION_STATE_JSON={json.dumps(state_payload, ensure_ascii=False)}",
     ]
     
@@ -181,6 +267,9 @@ def _build_session_context(session_id: str) -> str:
     missing = lead.get_missing_fields()
     if missing:
         context_lines.append(f"QUALIFICACAO_PENDENTE={', '.join(missing)}")
+    missing_trade = lead.get_missing_trade_fields()
+    if missing_trade:
+        context_lines.append(f"DADOS_TROCA_PENDENTES={', '.join(missing_trade)}")
     if lead.lead_answers:
         context_lines.append(f"LEAD_ANSWERS={json.dumps(lead.lead_answers, ensure_ascii=False)}")
     if lead.conversation_summary:
@@ -226,11 +315,7 @@ async def process_message(
     Returns:
         Dicionário com session_id, resposta do agente e metadata.
     """
-    logger.info(
-        "Processando mensagem | session={session} | msg={msg}",
-        session=session_id,
-        msg=user_message[:80],
-    )
+    logger.info("Processando mensagem | session={session}", session=session_id)
 
     if user_message.startswith(INITIAL_GREETING_MARKER):
         agent_reply = _build_initial_greeting(user_message)
@@ -290,49 +375,135 @@ async def process_message(
             logger.info(f"Fatos extraídos: {facts}")
             registrar_qualificacao(session_id=session_id, **facts)
             system_injections.append(f"O SISTEMA IDENTIFICOU E SALVOU FATOS NOVOS: {json.dumps(facts, ensure_ascii=False)}")
-            
-        # B. Busca de Estoque Contextual (unificado)
-        # Aciona quando: (1) lead perguntou sobre carro, OU (2) lead aceitou receber info e tem veículo em foco
+
+        lead_ctx = _get_lead(session_id)
+        mentioned_queries = detect_vehicle_mentions(input_text, limit=3)
+        if intent.vehicle_query:
+            normalized_explicit_query = intent.vehicle_query.strip().lower()
+            existing_queries = {query.lower() for query in mentioned_queries}
+            has_same_family = any(
+                normalized_explicit_query in query or query in normalized_explicit_query
+                for query in existing_queries
+            )
+            if normalized_explicit_query not in existing_queries and not has_same_family:
+                mentioned_queries.insert(0, intent.vehicle_query.strip())
+
+        if mentioned_queries:
+            registrar_estado(
+                session_id=session_id,
+                vehicle_mentions=mentioned_queries,
+                current_vehicle_request=mentioned_queries[0],
+                qualification_target_vehicle=mentioned_queries[0],
+            )
+
+        # B. Busca de Estoque Contextual (pode rodar mais de uma vez no mesmo turno)
         should_search_stock = intent.is_asking_for_vehicle or intent.is_accepting_info
         if should_search_stock:
-            lead_ctx = _get_lead(session_id)
-            # Prioridade: query explícita > veículo de interesse > vehicle_focus
-            search_query = (
-                intent.vehicle_query
-                or lead_ctx.veiculo_interesse
-                or lead_ctx.vehicle_focus.current
-            )
-            if search_query:
-                logger.info(f"Buscando estoque | trigger={'vehicle_ask' if intent.is_asking_for_vehicle else 'acceptance'} | query={search_query}")
+            search_queries: list[str] = []
+            if mentioned_queries:
+                search_queries.extend(mentioned_queries)
+            elif intent.vehicle_query:
+                search_queries.append(intent.vehicle_query)
+            elif lead_ctx.vehicle_journey.current_focus:
+                search_queries.append(lead_ctx.vehicle_journey.current_focus)
+            elif lead_ctx.veiculo_interesse:
+                search_queries.append(lead_ctx.veiculo_interesse)
+
+            seen_queries: set[str] = set()
+            primary_turn_query = search_queries[0] if search_queries else None
+            for search_query in search_queries:
+                normalized_query = search_query.lower().strip()
+                if not normalized_query or normalized_query in seen_queries:
+                    continue
+                seen_queries.add(normalized_query)
+
+                logger.info(
+                    "Buscando estoque | trigger={trigger} | query={query}",
+                    trigger=("vehicle_ask" if intent.is_asking_for_vehicle else "acceptance"),
+                    query=search_query,
+                )
                 estoque_raw = consultar_estoque(
                     prompt_busca=search_query,
                     modo="discovery",
                     limite=3,
                 )
-                # Pós-filtro: separar match exato do modelo vs alternativas
-                filtered_result = _filter_stock_by_model(estoque_raw, search_query)
-                system_injections.append(filtered_result)
+                filtered_payload = _filter_stock_payload(estoque_raw, search_query)
+                system_injections.append(_build_stock_injection(filtered_payload, search_query, estoque_raw))
+
+                if filtered_payload:
+                    presented_vehicles = filtered_payload.get("matches") or []
+                    registrar_estado(
+                        session_id=session_id,
+                        vehicle_focus_current=search_query if search_query == primary_turn_query else None,
+                        current_vehicle_request=search_query if search_query == primary_turn_query else None,
+                        qualification_target_vehicle=search_query if search_query == primary_turn_query else None,
+                        vehicle_mentions=[search_query],
+                        presented_vehicles=presented_vehicles,
+                    )
 
         # C. Busca Fotos se o lead pedir (Desacoplamento Visual)
         photos_to_send = []
         if intent.is_asking_for_photos:
             lead = _get_lead(session_id)
-            # Prioridade para FOTOS: 1. vehicle_query (se o lead especificou 'desse 2015') 2. vehicle_focus 3. veiculo_interesse
-            # Proteção: Ignorar se o vehicle_query bater com o carro de troca.
-            query = intent.vehicle_query
-            if query and lead.veiculo_troca and query.lower().strip() in lead.veiculo_troca.lower().strip():
-                query = None # Ignora, é o carro de troca
-                
-            query = query or lead.vehicle_focus.current or lead.veiculo_interesse
-            if query:
-                # Se o lead escolheu um veículo diferente do foco atual, atualiza o foco
-                if query != lead.vehicle_focus.current:
-                    registrar_estado(session_id=session_id, vehicle_focus_current=query)
-                logger.info(f"Buscando fotos no fundo para: {query}")
-                photos_to_send = get_vehicle_photo_urls(query, limit=10)
+            candidate_vehicles = [
+                item.model_dump() for item in lead.vehicle_journey.last_presented_vehicles
+            ] or [
+                item.model_dump() for item in lead.vehicle_journey.presented_vehicles
+            ]
+
+            explicit_query = intent.vehicle_query
+            if explicit_query and lead.veiculo_troca and explicit_query.lower().strip() in lead.veiculo_troca.lower().strip():
+                explicit_query = None
+
+            resolved_vehicle = resolve_vehicle_target(
+                request_text=input_text,
+                explicit_query=explicit_query,
+                candidate_vehicles=candidate_vehicles,
+            )
+
+            if resolved_vehicle:
+                photo_target = str(resolved_vehicle.get("titulo") or resolved_vehicle.get("modelo") or explicit_query or "").strip()
+                registrar_estado(
+                    session_id=session_id,
+                    vehicle_focus_current=photo_target,
+                    current_vehicle_request=photo_target,
+                    photo_target_vehicle=photo_target,
+                    qualification_target_vehicle=photo_target,
+                    vehicle_mentions=[resolved_vehicle],
+                )
+                logger.info("Buscando fotos no fundo para: {query}", query=photo_target)
+                photos_to_send = get_vehicle_photo_urls(photo_target, limit=10)
                 if photos_to_send:
-                    system_injections.append(f"O SISTEMA ENVIOU {len(photos_to_send)} FOTOS DO VEÍCULO DA LOJA PARA O CLIENTE.")
-                
+                    system_injections.append(
+                        f"O SISTEMA ENVIOU {len(photos_to_send)} FOTOS DO VEÍCULO DA LOJA PARA O CLIENTE. "
+                        f"VEICULO_ALVO_DAS_FOTOS={photo_target}"
+                    )
+                elif candidate_vehicles and len(candidate_vehicles) > 1:
+                    system_injections.append(
+                        "O LEAD PEDIU FOTOS DE UM VEÍCULO ESPECÍFICO, MAS O SISTEMA NÃO CONSEGUIU ENVIAR AS FOTOS. "
+                        "SEJA EXPLÍCITO SOBRE A AMBIGUIDADE E CONFIRME QUAL VEÍCULO ELE QUER ANTES DE AFIRMAR QUE ENVIOU."
+                    )
+            elif candidate_vehicles and len(candidate_vehicles) > 1:
+                system_injections.append(
+                    "O LEAD PEDIU FOTOS, MAS HÁ MAIS DE UM VEÍCULO NO CONTEXTO E O ALVO NÃO FICOU CLARO. "
+                    "NÃO AFIRME QUE ENVIOU FOTOS. PEÇA CONFIRMAÇÃO OBJETIVA DO MODELO CERTO."
+                )
+            else:
+                fallback_query = explicit_query or lead.vehicle_journey.current_focus or lead.veiculo_interesse
+                if fallback_query:
+                    registrar_estado(
+                        session_id=session_id,
+                        photo_target_vehicle=fallback_query,
+                        qualification_target_vehicle=fallback_query,
+                    )
+                    logger.info("Buscando fotos no fundo para fallback: {query}", query=fallback_query)
+                    photos_to_send = get_vehicle_photo_urls(fallback_query, limit=10)
+                    if photos_to_send:
+                        system_injections.append(
+                            f"O SISTEMA ENVIOU {len(photos_to_send)} FOTOS DO VEÍCULO DA LOJA PARA O CLIENTE. "
+                            f"VEICULO_ALVO_DAS_FOTOS={fallback_query}"
+                        )
+
         # D. Densidade e Maturidade (Prevenir fechamento prematuro)
         lead = _get_lead(session_id)
         score = lead.completeness_score()
@@ -379,11 +550,7 @@ async def process_message(
         logger.error("Erro no agente | session={session} | error={err}", session=session_id, err=str(e))
         agent_reply = "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes."
 
-    logger.info(
-        "Resposta gerada | session={session} | reply={reply}",
-        session=session_id,
-        reply=agent_reply[:80],
-    )
+    logger.info("Resposta gerada | session={session}", session=session_id)
 
     return {
         "session_id": session_id,
