@@ -162,8 +162,9 @@ def _filter_stock_by_model(estoque_raw: str, search_query: str) -> str:
         filtered_json = json.dumps(data, ensure_ascii=False)
         logger.info(f"Estoque filtrado | tipo=busca_ampla | count={len(matches[:3])}")
         return (
-            f"O SISTEMA BUSCOU OPÇÕES PARA '{search_query}'. "
-            f"APRESENTE AS MELHORES OPÇÕES ENCONTRADAS.\n{filtered_json}"
+            f"O SISTEMA BUSCOU POR '{search_query}', MAS NÃO ENCONTROU O MODELO EXATO. "
+            f"INFORME AO LEAD QUE NÃO TEMOS O MODELO ESPECÍFICO DISPONÍVEL NO MOMENTO, "
+            f"MAS APRESENTE ESTAS 3 MELHORES ALTERNATIVAS ABAIXO PARA MANTER O INTERESSE.\n{filtered_json}"
         )
 
 def _build_session_context(session_id: str) -> str:
@@ -279,6 +280,12 @@ async def process_message(
         
         # A. Atualiza o Estado/CRM se o lead forneceu fatos novos
         facts = intent.qualification_facts.model_dump(exclude_none=True)
+        
+        # Failsafe: Nunca permitir que o nome do lead seja extraído como 'Lucas' (nome do agente)
+        if facts.get("nome") and str(facts.get("nome")).lower().strip() == "lucas":
+            logger.warning("Fato 'nome: Lucas' ignorado por ser o nome do agente.")
+            facts.pop("nome")
+
         if facts:
             logger.info(f"Fatos extraídos: {facts}")
             registrar_qualificacao(session_id=session_id, **facts)

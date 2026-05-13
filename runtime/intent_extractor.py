@@ -2,7 +2,9 @@ import json
 import os
 from typing import Optional
 from pydantic import BaseModel, Field
+# pyrefly: ignore [missing-import]
 from agno.agent import Agent
+# pyrefly: ignore [missing-import]
 from agno.models.openai import OpenAIChat
 
 class QualificationFacts(BaseModel):
@@ -17,8 +19,8 @@ class QualificationFacts(BaseModel):
 
 class IntentExtraction(BaseModel):
     is_asking_for_vehicle: bool = Field(..., description="True apenas se o lead está pedindo para ver opções de veículos, preços ou características do estoque.")
-    vehicle_query: Optional[str] = Field(None, description="O briefing de busca, se is_asking_for_vehicle=True. Ex: 'SUV automática' ou 'Gol 2022'.")
-    is_asking_for_photos: bool = Field(..., description="True se o lead pediu fotos/imagens explicitamente.")
+    vehicle_query: Optional[str] = Field(None, description="O modelo específico mencionado pelo lead. Se o lead pedir fotos de um carro específico (ex: 'fotos do Gol'), extraia 'Gol' aqui obrigatoriamente.")
+    is_asking_for_photos: bool = Field(..., description="True APENAS se o lead pediu para RECEBER fotos do nosso estoque. False se o lead está enviando ou oferecendo fotos do carro dele.")
     is_accepting_info: bool = Field(..., description="True se o lead está aceitando/confirmando receber informações (ex: 'pode sim', 'claro', 'manda', 'quero saber', 'show'). False se está fazendo uma pergunta nova ou dando informação.")
     wants_human: bool = Field(..., description="True se o lead exigir um humano, gerente, ou estiver muito irritado.")
     qualification_facts: QualificationFacts = Field(default_factory=QualificationFacts)
@@ -28,6 +30,10 @@ Você é um extrator semântico frio, rápido e factual.
 Seu único papel é extrair dados de intenção e qualificação da mensagem de um cliente em uma concessionária.
 NÃO responda ao cliente. NÃO invente dados.
 Se uma informação não estiver CLARA e EXPLÍCITA na mensagem, deixe como nulo.
+
+REGRAS DE NOME:
+- NUNCA extraia 'Lucas' como nome do lead. 'Lucas' é o nome do agente/vendedor.
+- Só extraia o nome se o lead se identificar explicitamente (ex: 'Sou o Raul', 'Meu nome é João').
 
 REGRAS DE INFERÊNCIA PERMITIDAS:
 - Se o lead pergunta 'aceitam troca?' ou diz 'tenho um Gol 2011' ou 'quero trocar': tem_troca=True.
@@ -44,6 +50,10 @@ SELEÇÃO DE OPÇÕES:
 Se o agente apresentou várias opções (ex: HB20 2017 e HB20 2015) e o lead escolheu uma ou pediu fotos ("desse 2015", "do automático", "do mais barato"):
 1. Preencha o `vehicle_query` com a referência completa do modelo escolhido (ex: "HB20 2015", "HB20 Automático").
 2. Se o lead pedir fotos, marque `is_asking_for_photos=True`.
+
+REGRAS PARA FOTOS:
+- Se o lead diz 'tem fotos?', 'manda fotos', 'quero ver as fotos desse': is_asking_for_photos=True.
+- Se o lead diz 'vou mandar as fotos', 'já te envio as fotos', 'já encaminho as imagens': is_asking_for_photos=False (ele está enviando, não pedindo).
 
 Sua extração será usada pelo Runtime do sistema apenas para carregar o contexto antes da resposta do Vendedor.
 """

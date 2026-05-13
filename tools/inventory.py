@@ -60,15 +60,15 @@ def _match_vehicle_flexible(vehicle: dict[str, Any], search_term: str) -> bool:
     if not search_term:
         return True
 
-    term = search_term.lower()
-    v_marca = str(vehicle.get("marca", "")).lower()
-    v_modelo = str(vehicle.get("modelo", "")).lower()
-    v_titulo = str(vehicle.get("titulo", "")).lower()
+    def normalize(t: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", t.lower())
 
-    exact_fields = [v_titulo, v_modelo, v_marca]
-    if any(re.search(rf"\b{re.escape(term)}\b", field) for field in exact_fields if field):
-        return True
-    if term in v_titulo and len(term) >= 5:
+    term = normalize(search_term)
+    v_marca = normalize(str(vehicle.get("marca", "")))
+    v_modelo = normalize(str(vehicle.get("modelo", "")))
+    v_titulo = normalize(str(vehicle.get("titulo", "")))
+
+    if term in v_titulo or term in v_modelo or term in v_marca:
         return True
 
     words = set(re.findall(r"\w+", term))
