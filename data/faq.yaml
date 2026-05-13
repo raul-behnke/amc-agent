@@ -1,0 +1,88 @@
+faq:
+  titulo: "FAQ Comercial — AMC Veículos"
+  blocos:
+    - id: 1
+      titulo: "Formas de Pagamento"
+      itens:
+        - pergunta: "Aceitam financiamento?"
+          resposta: "Sim, aceitamos."
+        - pergunta: "Trabalham com quais bancos?"
+          resposta: "Os principais bancos do mercado."
+        - pergunta: "Qual a entrada mínima?"
+          resposta: "A entrada pode variar de acordo com o seu CPF, podendo financiar até 100%."
+        - pergunta: "Parcelam no cartão?"
+          resposta: "Sim, parcelamos em até 18x."
+        - pergunta: "Aceitam PIX ou transferência?"
+          resposta: "Sim, aceitamos Pix ou TED."
+        - pergunta: "Tem desconto à vista?"
+          resposta: "Já trabalhamos com o melhor valor nos anúncios, mas qual seria sua proposta?"
+        - pergunta: "Dá para financiar sem entrada?"
+          resposta: "Sim, podemos financiar, tudo depende do seu CPF."
+
+    - id: 2
+      titulo: "Troca e Avaliação"
+      itens:
+        - pergunta: "Aceitam veículo na troca?"
+          resposta: "Sim, aceitamos seu usado na troca."
+        - pergunta: "Como funciona a avaliação?"
+          resposta: "Para avaliar seu veículo com maior precisão, é necessária uma avaliação presencial, mas podemos dar uma prévia por foto. Pra te dar um valor mais assertivo, me manda por favor: fotos do carro (frente, traseira, laterais e interior), KM atual, ano/modelo completo e se tem algum detalhe ou avaria."
+        - pergunta: "Avaliam por foto ou só presencial?"
+          resposta: "Podemos dar uma prévia por foto sim! Me manda: fotos do carro (frente, traseira, laterais e interior), KM atual, ano/modelo completo e se tem algum detalhe ou avaria."
+        - pergunta: "Quanto vale meu carro? / Qual o valor da minha troca?"
+          resposta: "Pra te dar um valor mais assertivo, me manda por favor: fotos do carro (frente, traseira, laterais e interior), KM atual, ano/modelo completo e se tem algum detalhe ou avaria. Com isso passo pro nosso consultor avaliar."
+        - pergunta: "Quanto tempo leva a avaliação?"
+          resposta: "A avaliação presencial depende do veículo, mas gira em torno de 15 minutos."
+        - pergunta: "A troca pode ser usada como entrada?"
+          resposta: "Pode ser usada como entrada, inclusive como troco na troca."
+        - pergunta: "Avaliam veículos financiados?"
+          resposta: "Sim, avaliamos."
+
+    - id: 3
+      titulo: "Processo de Compra e Documentação"
+      itens:
+        - pergunta: "Quais documentos são necessários?"
+          resposta: "Precisamos de CNH/RG e comprovante de residência em nome do comprador."
+        - pergunta: "Como funciona a transferência?"
+          resposta: "Com a documentação necessária, realizamos todo o processo pelo nosso despachante."
+        - pergunta: "O veículo já sai no meu nome?"
+          resposta: "Não, geralmente leva em torno de 10 dias para efetivar a transferência."
+        - pergunta: "Quanto tempo leva a entrega?"
+          resposta: "Com a documentação feita e valores baixados, a entrega é realizada no mesmo dia."
+        - pergunta: "Tem garantia?"
+          resposta: "Sim, garantia de 3 meses ou 3 mil km."
+        - pergunta: "O carro é revisado antes da entrega?"
+          resposta: "Sim, como processo padrão, todo veículo da nossa loja só é entregue após revisão."
+        - pergunta: "Tem custos adicionais (taxas, transferência)?"
+          resposta: "Os valores dependem de cada negociação."
+
+    - id: 4
+      titulo: "Atendimento, Visita e Contato"
+      itens:
+        - pergunta: "Onde fica a loja?"
+          resposta: "Ficamos localizados na Rua Iririú, nº 2464, Bairro Iririú, Joinville/SC."
+        - pergunta: "Qual o horário de atendimento?"
+          resposta: "De segunda a sexta, das 8h30 às 18h30, sem fechar para almoço, e sábado das 8h30 às 13h."
+        - pergunta: "Precisa agendar visita?"
+          resposta: "Não é necessário, porém com agendamento conseguimos dar um atendimento mais qualificado."
+        - pergunta: "Faz test drive?"
+          resposta: "Sim, e aguardamos você para realizar um test drive."
+        - pergunta: "Atendimento por WhatsApp?"
+          resposta: "Sim, podemos realizar toda a negociação via WhatsApp."
+        - pergunta: "Atendem finais de semana?"
+          resposta: "Atendemos aos sábados, das 8h30 às 13h."
+
+    - id: 5
+      titulo: "Políticas e Condições Gerais"
+      itens:
+        - pergunta: "Trabalham com garantia? Qual tipo?"
+          resposta: "Trabalhamos com a garantia prevista por lei (3 meses ou 3 mil km)."
+        - pergunta: "Reservam veículo? Como funciona?"
+          resposta: "Sim, realizamos a reserva do veículo mediante sinal de negócio."
+        - pergunta: "Trabalham com sinal/entrada para reserva?"
+          resposta: "Sim, trabalhamos com sinal para reserva."
+        - pergunta: "Cancelamento de compra (como funciona?)"
+          resposta: "Esse assunto pode ser tratado na loja."
+        - pergunta: "Vendem para outras cidades/estados?"
+          resposta: "Sim, vendemos para todas as cidades e estados."
+        - pergunta: "Fazem entrega do veículo?"
+          resposta: "Depende de cada negociação."

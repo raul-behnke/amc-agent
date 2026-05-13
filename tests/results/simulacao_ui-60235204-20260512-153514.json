@@ -1,0 +1,1037 @@
+[
+  {
+    "scenario_id": "real-001",
+    "lead_name": "A.K.B",
+    "summary": "Lead demonstrou interesse em um veículo Gol 2013, enviou documentos para consulta de crédito e finalizou a compra com sucesso através do Banco Pan.",
+    "selected_scenario": "Lead solicita informações sobre um veículo específico e aguarda retorno do consultor.",
+    "transcript": [
+      {
+        "role": "lead",
+        "message": "tenho interesse no Gol 2013",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "prefiro falar com um consultor",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      }
+    ],
+    "simulator_notes": [
+      "Mensagem inicial do cenário.",
+      "Resposta curta realista para manter o fluxo.",
+      "Pedir atendimento humano.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo."
+    ],
+    "tool_traces": [],
+    "stock_queries": [],
+    "stock_results": [],
+    "photos_sent": [],
+    "crm_actions": [],
+    "scheduling_actions": [],
+    "errors": [],
+    "final_lead_state": {
+      "nome": null,
+      "whatsapp": null,
+      "interesse": null,
+      "veiculo_interesse": null,
+      "tipo_veiculo": null,
+      "marca_preferida": null,
+      "modelo_preferido": null,
+      "faixa_preco": null,
+      "ano_minimo": null,
+      "cambio": null,
+      "intencao": null,
+      "tem_troca": null,
+      "veiculo_troca": null,
+      "motivo_troca": null,
+      "motivacao": null,
+      "negociacao": null,
+      "precisa_financiamento": null,
+      "cidade": null,
+      "e_local": null,
+      "data_visita": null,
+      "motivo_handoff": null,
+      "status": "NEW_LEAD",
+      "lead_stage": "NEW_LEAD",
+      "conversation_summary": null,
+      "last_interaction": null,
+      "vehicle_focus": {
+        "current": null,
+        "last_valid": null,
+        "active_filters": null,
+        "alternatives_shown": []
+      },
+      "lead_answers": {},
+      "qualificacao_pendente": [
+        "👤 Nome",
+        "🚗 Interesse",
+        "🔄 Intenção",
+        "💬 Motivação",
+        "💰 Negociação",
+        "📍 Cidade"
+      ],
+      "qualificacao": {
+        "nome": null,
+        "interesse": null,
+        "intencao": null,
+        "troca": "Não informada/Não possui",
+        "motivacao": null,
+        "negociacao": null,
+        "cidade": null
+      }
+    },
+    "evaluation": {
+      "status": "⚠️ Parcial",
+      "score": 6.4,
+      "checks": [
+        {
+          "name": "respondeu a pergunta do lead",
+          "status": "partial",
+          "evidence": "Sem pergunta objetiva clara no primeiro turno."
+        },
+        {
+          "name": "seguiu o processo comercial",
+          "status": "fail",
+          "evidence": "Pouca evolução comercial: score 0%."
+        },
+        {
+          "name": "conduziu com contexto e próximo passo útil",
+          "status": "fail",
+          "evidence": "Faltou progressão comercial clara na conversa."
+        },
+        {
+          "name": "evitou perguntas repetidas",
+          "status": "pass",
+          "evidence": "Sem repetição literal clara."
+        },
+        {
+          "name": "evitou comportamento papagaio",
+          "status": "pass",
+          "evidence": "Sem eco excessivo do lead."
+        },
+        {
+          "name": "fez apenas uma pergunta por vez",
+          "status": "pass",
+          "evidence": "Nenhuma mensagem com múltiplas perguntas."
+        },
+        {
+          "name": "tratou fotos corretamente",
+          "status": "partial",
+          "evidence": "Sem pedido explícito de fotos."
+        },
+        {
+          "name": "evitou fechamento precoce",
+          "status": "pass",
+          "evidence": "Sem fechamento prematuro evidente."
+        },
+        {
+          "name": "conduziu fluxo de troca corretamente",
+          "status": "partial",
+          "evidence": "Cenário sem foco principal em troca."
+        },
+        {
+          "name": "agendou ou escalou corretamente",
+          "status": "partial",
+          "evidence": "Cenário sugeria humano, mas não houve handoff explícito."
+        },
+        {
+          "name": "manteve tom humano e consultivo",
+          "status": "pass",
+          "evidence": "Tom compatível com conversa comercial natural."
+        }
+      ]
+    }
+  },
+  {
+    "scenario_id": "real-002",
+    "lead_name": "Ade Varela",
+    "summary": "Ade Varela está em contato com a AMC Veículos e aguarda o encaminhamento para um consultor de vendas para esclarecer dúvidas.",
+    "selected_scenario": "Encaminhar o contato de um lead para um consultor de vendas após a primeira interação.",
+    "transcript": [
+      {
+        "role": "lead",
+        "message": "tenho interesse no veículo anunciado",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "prefiro falar com um consultor",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      }
+    ],
+    "simulator_notes": [
+      "Mensagem inicial do cenário.",
+      "Resposta curta realista para manter o fluxo.",
+      "Pedir atendimento humano.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo."
+    ],
+    "tool_traces": [],
+    "stock_queries": [],
+    "stock_results": [],
+    "photos_sent": [],
+    "crm_actions": [],
+    "scheduling_actions": [],
+    "errors": [],
+    "final_lead_state": {
+      "nome": null,
+      "whatsapp": null,
+      "interesse": null,
+      "veiculo_interesse": null,
+      "tipo_veiculo": null,
+      "marca_preferida": null,
+      "modelo_preferido": null,
+      "faixa_preco": null,
+      "ano_minimo": null,
+      "cambio": null,
+      "intencao": null,
+      "tem_troca": null,
+      "veiculo_troca": null,
+      "motivo_troca": null,
+      "motivacao": null,
+      "negociacao": null,
+      "precisa_financiamento": null,
+      "cidade": null,
+      "e_local": null,
+      "data_visita": null,
+      "motivo_handoff": null,
+      "status": "NEW_LEAD",
+      "lead_stage": "NEW_LEAD",
+      "conversation_summary": null,
+      "last_interaction": null,
+      "vehicle_focus": {
+        "current": null,
+        "last_valid": null,
+        "active_filters": null,
+        "alternatives_shown": []
+      },
+      "lead_answers": {},
+      "qualificacao_pendente": [
+        "👤 Nome",
+        "🚗 Interesse",
+        "🔄 Intenção",
+        "💬 Motivação",
+        "💰 Negociação",
+        "📍 Cidade"
+      ],
+      "qualificacao": {
+        "nome": null,
+        "interesse": null,
+        "intencao": null,
+        "troca": "Não informada/Não possui",
+        "motivacao": null,
+        "negociacao": null,
+        "cidade": null
+      }
+    },
+    "evaluation": {
+      "status": "⚠️ Parcial",
+      "score": 6.4,
+      "checks": [
+        {
+          "name": "respondeu a pergunta do lead",
+          "status": "partial",
+          "evidence": "Sem pergunta objetiva clara no primeiro turno."
+        },
+        {
+          "name": "seguiu o processo comercial",
+          "status": "fail",
+          "evidence": "Pouca evolução comercial: score 0%."
+        },
+        {
+          "name": "conduziu com contexto e próximo passo útil",
+          "status": "fail",
+          "evidence": "Faltou progressão comercial clara na conversa."
+        },
+        {
+          "name": "evitou perguntas repetidas",
+          "status": "pass",
+          "evidence": "Sem repetição literal clara."
+        },
+        {
+          "name": "evitou comportamento papagaio",
+          "status": "pass",
+          "evidence": "Sem eco excessivo do lead."
+        },
+        {
+          "name": "fez apenas uma pergunta por vez",
+          "status": "pass",
+          "evidence": "Nenhuma mensagem com múltiplas perguntas."
+        },
+        {
+          "name": "tratou fotos corretamente",
+          "status": "partial",
+          "evidence": "Sem pedido explícito de fotos."
+        },
+        {
+          "name": "evitou fechamento precoce",
+          "status": "pass",
+          "evidence": "Sem fechamento prematuro evidente."
+        },
+        {
+          "name": "conduziu fluxo de troca corretamente",
+          "status": "partial",
+          "evidence": "Cenário sem foco principal em troca."
+        },
+        {
+          "name": "agendou ou escalou corretamente",
+          "status": "partial",
+          "evidence": "Cenário sugeria humano, mas não houve handoff explícito."
+        },
+        {
+          "name": "manteve tom humano e consultivo",
+          "status": "pass",
+          "evidence": "Tom compatível com conversa comercial natural."
+        }
+      ]
+    }
+  },
+  {
+    "scenario_id": "real-003",
+    "lead_name": "aKp71lzoBCHwCOZSEndy",
+    "summary": "Lead demonstrou interesse em adquirir um carro, especificamente um HB20, com orçamento de até 60 mil reais. O atendimento foi encaminhado para um consultor de vendas da AMC Veículos.",
+    "selected_scenario": "Encaminhar um lead interessado em um carro específico para um consultor de vendas.",
+    "transcript": [
+      {
+        "role": "lead",
+        "message": "tenho interesse no HB20",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "prefiro falar com um consultor",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      }
+    ],
+    "simulator_notes": [
+      "Mensagem inicial do cenário.",
+      "Resposta curta realista para manter o fluxo.",
+      "Pedir atendimento humano.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo."
+    ],
+    "tool_traces": [],
+    "stock_queries": [],
+    "stock_results": [],
+    "photos_sent": [],
+    "crm_actions": [],
+    "scheduling_actions": [],
+    "errors": [],
+    "final_lead_state": {
+      "nome": null,
+      "whatsapp": null,
+      "interesse": null,
+      "veiculo_interesse": null,
+      "tipo_veiculo": null,
+      "marca_preferida": null,
+      "modelo_preferido": null,
+      "faixa_preco": null,
+      "ano_minimo": null,
+      "cambio": null,
+      "intencao": null,
+      "tem_troca": null,
+      "veiculo_troca": null,
+      "motivo_troca": null,
+      "motivacao": null,
+      "negociacao": null,
+      "precisa_financiamento": null,
+      "cidade": null,
+      "e_local": null,
+      "data_visita": null,
+      "motivo_handoff": null,
+      "status": "NEW_LEAD",
+      "lead_stage": "NEW_LEAD",
+      "conversation_summary": null,
+      "last_interaction": null,
+      "vehicle_focus": {
+        "current": null,
+        "last_valid": null,
+        "active_filters": null,
+        "alternatives_shown": []
+      },
+      "lead_answers": {},
+      "qualificacao_pendente": [
+        "👤 Nome",
+        "🚗 Interesse",
+        "🔄 Intenção",
+        "💬 Motivação",
+        "💰 Negociação",
+        "📍 Cidade"
+      ],
+      "qualificacao": {
+        "nome": null,
+        "interesse": null,
+        "intencao": null,
+        "troca": "Não informada/Não possui",
+        "motivacao": null,
+        "negociacao": null,
+        "cidade": null
+      }
+    },
+    "evaluation": {
+      "status": "⚠️ Parcial",
+      "score": 6.4,
+      "checks": [
+        {
+          "name": "respondeu a pergunta do lead",
+          "status": "partial",
+          "evidence": "Sem pergunta objetiva clara no primeiro turno."
+        },
+        {
+          "name": "seguiu o processo comercial",
+          "status": "fail",
+          "evidence": "Pouca evolução comercial: score 0%."
+        },
+        {
+          "name": "conduziu com contexto e próximo passo útil",
+          "status": "fail",
+          "evidence": "Faltou progressão comercial clara na conversa."
+        },
+        {
+          "name": "evitou perguntas repetidas",
+          "status": "pass",
+          "evidence": "Sem repetição literal clara."
+        },
+        {
+          "name": "evitou comportamento papagaio",
+          "status": "pass",
+          "evidence": "Sem eco excessivo do lead."
+        },
+        {
+          "name": "fez apenas uma pergunta por vez",
+          "status": "pass",
+          "evidence": "Nenhuma mensagem com múltiplas perguntas."
+        },
+        {
+          "name": "tratou fotos corretamente",
+          "status": "partial",
+          "evidence": "Sem pedido explícito de fotos."
+        },
+        {
+          "name": "evitou fechamento precoce",
+          "status": "pass",
+          "evidence": "Sem fechamento prematuro evidente."
+        },
+        {
+          "name": "conduziu fluxo de troca corretamente",
+          "status": "partial",
+          "evidence": "Cenário sem foco principal em troca."
+        },
+        {
+          "name": "agendou ou escalou corretamente",
+          "status": "partial",
+          "evidence": "Cenário sugeria humano, mas não houve handoff explícito."
+        },
+        {
+          "name": "manteve tom humano e consultivo",
+          "status": "pass",
+          "evidence": "Tom compatível com conversa comercial natural."
+        }
+      ]
+    }
+  },
+  {
+    "scenario_id": "real-004",
+    "lead_name": "Alan Santana",
+    "summary": "Alan Santana está em contato com a AMC Veículos e seu interesse será encaminhado para um consultor de vendas para esclarecimento de dúvidas.",
+    "selected_scenario": "Encaminhar o contato de um lead para um consultor de vendas após a primeira interação.",
+    "transcript": [
+      {
+        "role": "lead",
+        "message": "tenho interesse no veículo anunciado",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "prefiro falar com um consultor",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      }
+    ],
+    "simulator_notes": [
+      "Mensagem inicial do cenário.",
+      "Resposta curta realista para manter o fluxo.",
+      "Pedir atendimento humano.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo."
+    ],
+    "tool_traces": [],
+    "stock_queries": [],
+    "stock_results": [],
+    "photos_sent": [],
+    "crm_actions": [],
+    "scheduling_actions": [],
+    "errors": [],
+    "final_lead_state": {
+      "nome": null,
+      "whatsapp": null,
+      "interesse": null,
+      "veiculo_interesse": null,
+      "tipo_veiculo": null,
+      "marca_preferida": null,
+      "modelo_preferido": null,
+      "faixa_preco": null,
+      "ano_minimo": null,
+      "cambio": null,
+      "intencao": null,
+      "tem_troca": null,
+      "veiculo_troca": null,
+      "motivo_troca": null,
+      "motivacao": null,
+      "negociacao": null,
+      "precisa_financiamento": null,
+      "cidade": null,
+      "e_local": null,
+      "data_visita": null,
+      "motivo_handoff": null,
+      "status": "NEW_LEAD",
+      "lead_stage": "NEW_LEAD",
+      "conversation_summary": null,
+      "last_interaction": null,
+      "vehicle_focus": {
+        "current": null,
+        "last_valid": null,
+        "active_filters": null,
+        "alternatives_shown": []
+      },
+      "lead_answers": {},
+      "qualificacao_pendente": [
+        "👤 Nome",
+        "🚗 Interesse",
+        "🔄 Intenção",
+        "💬 Motivação",
+        "💰 Negociação",
+        "📍 Cidade"
+      ],
+      "qualificacao": {
+        "nome": null,
+        "interesse": null,
+        "intencao": null,
+        "troca": "Não informada/Não possui",
+        "motivacao": null,
+        "negociacao": null,
+        "cidade": null
+      }
+    },
+    "evaluation": {
+      "status": "⚠️ Parcial",
+      "score": 6.4,
+      "checks": [
+        {
+          "name": "respondeu a pergunta do lead",
+          "status": "partial",
+          "evidence": "Sem pergunta objetiva clara no primeiro turno."
+        },
+        {
+          "name": "seguiu o processo comercial",
+          "status": "fail",
+          "evidence": "Pouca evolução comercial: score 0%."
+        },
+        {
+          "name": "conduziu com contexto e próximo passo útil",
+          "status": "fail",
+          "evidence": "Faltou progressão comercial clara na conversa."
+        },
+        {
+          "name": "evitou perguntas repetidas",
+          "status": "pass",
+          "evidence": "Sem repetição literal clara."
+        },
+        {
+          "name": "evitou comportamento papagaio",
+          "status": "pass",
+          "evidence": "Sem eco excessivo do lead."
+        },
+        {
+          "name": "fez apenas uma pergunta por vez",
+          "status": "pass",
+          "evidence": "Nenhuma mensagem com múltiplas perguntas."
+        },
+        {
+          "name": "tratou fotos corretamente",
+          "status": "partial",
+          "evidence": "Sem pedido explícito de fotos."
+        },
+        {
+          "name": "evitou fechamento precoce",
+          "status": "pass",
+          "evidence": "Sem fechamento prematuro evidente."
+        },
+        {
+          "name": "conduziu fluxo de troca corretamente",
+          "status": "partial",
+          "evidence": "Cenário sem foco principal em troca."
+        },
+        {
+          "name": "agendou ou escalou corretamente",
+          "status": "partial",
+          "evidence": "Cenário sugeria humano, mas não houve handoff explícito."
+        },
+        {
+          "name": "manteve tom humano e consultivo",
+          "status": "pass",
+          "evidence": "Tom compatível com conversa comercial natural."
+        }
+      ]
+    }
+  },
+  {
+    "scenario_id": "real-005",
+    "lead_name": "Albino Guilherme",
+    "summary": "Albino demonstrou interesse em informações sobre a compra de um Ford Ka Sedan e está em contato com um consultor da AMC Veículos para esclarecer dúvidas e receber detalhes sobre o veículo.",
+    "selected_scenario": "Iniciar contato com um lead que demonstrou interesse em um veículo específico através de um anúncio.",
+    "transcript": [
+      {
+        "role": "lead",
+        "message": "tenho interesse no Ford Ka Sedan e está em contato c",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "prefiro falar com um consultor",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lead",
+        "message": "pode ser",
+        "attachments": [],
+        "metadata": {}
+      },
+      {
+        "role": "lucas",
+        "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs:",
+        "attachments": [],
+        "metadata": {}
+      }
+    ],
+    "simulator_notes": [
+      "Mensagem inicial do cenário.",
+      "Resposta curta realista para manter o fluxo.",
+      "Pedir atendimento humano.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo.",
+      "Resposta curta realista para manter o fluxo."
+    ],
+    "tool_traces": [],
+    "stock_queries": [],
+    "stock_results": [],
+    "photos_sent": [],
+    "crm_actions": [],
+    "scheduling_actions": [],
+    "errors": [],
+    "final_lead_state": {
+      "nome": null,
+      "whatsapp": null,
+      "interesse": null,
+      "veiculo_interesse": null,
+      "tipo_veiculo": null,
+      "marca_preferida": null,
+      "modelo_preferido": null,
+      "faixa_preco": null,
+      "ano_minimo": null,
+      "cambio": null,
+      "intencao": null,
+      "tem_troca": null,
+      "veiculo_troca": null,
+      "motivo_troca": null,
+      "motivacao": null,
+      "negociacao": null,
+      "precisa_financiamento": null,
+      "cidade": null,
+      "e_local": null,
+      "data_visita": null,
+      "motivo_handoff": null,
+      "status": "NEW_LEAD",
+      "lead_stage": "NEW_LEAD",
+      "conversation_summary": null,
+      "last_interaction": null,
+      "vehicle_focus": {
+        "current": null,
+        "last_valid": null,
+        "active_filters": null,
+        "alternatives_shown": []
+      },
+      "lead_answers": {},
+      "qualificacao_pendente": [
+        "👤 Nome",
+        "🚗 Interesse",
+        "🔄 Intenção",
+        "💬 Motivação",
+        "💰 Negociação",
+        "📍 Cidade"
+      ],
+      "qualificacao": {
+        "nome": null,
+        "interesse": null,
+        "intencao": null,
+        "troca": "Não informada/Não possui",
+        "motivacao": null,
+        "negociacao": null,
+        "cidade": null
+      }
+    },
+    "evaluation": {
+      "status": "⚠️ Parcial",
+      "score": 6.4,
+      "checks": [
+        {
+          "name": "respondeu a pergunta do lead",
+          "status": "partial",
+          "evidence": "Sem pergunta objetiva clara no primeiro turno."
+        },
+        {
+          "name": "seguiu o processo comercial",
+          "status": "fail",
+          "evidence": "Pouca evolução comercial: score 0%."
+        },
+        {
+          "name": "conduziu com contexto e próximo passo útil",
+          "status": "fail",
+          "evidence": "Faltou progressão comercial clara na conversa."
+        },
+        {
+          "name": "evitou perguntas repetidas",
+          "status": "pass",
+          "evidence": "Sem repetição literal clara."
+        },
+        {
+          "name": "evitou comportamento papagaio",
+          "status": "pass",
+          "evidence": "Sem eco excessivo do lead."
+        },
+        {
+          "name": "fez apenas uma pergunta por vez",
+          "status": "pass",
+          "evidence": "Nenhuma mensagem com múltiplas perguntas."
+        },
+        {
+          "name": "tratou fotos corretamente",
+          "status": "partial",
+          "evidence": "Sem pedido explícito de fotos."
+        },
+        {
+          "name": "evitou fechamento precoce",
+          "status": "pass",
+          "evidence": "Sem fechamento prematuro evidente."
+        },
+        {
+          "name": "conduziu fluxo de troca corretamente",
+          "status": "partial",
+          "evidence": "Cenário sem foco principal em troca."
+        },
+        {
+          "name": "agendou ou escalou corretamente",
+          "status": "partial",
+          "evidence": "Cenário sugeria humano, mas não houve handoff explícito."
+        },
+        {
+          "name": "manteve tom humano e consultivo",
+          "status": "pass",
+          "evidence": "Tom compatível com conversa comercial natural."
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,43 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: Lucas SDR • regressão comercial
+    - heading "Monitor de Cenários Reais" [level=1] [ref=e5]
+    - generic [ref=e6]: "Acompanhe a execução dos testes conversacionais com foco no que importa: se o Lucas respondeu bem, qualificou direito e conduziu a conversa como atendimento comercial real."
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - heading "Nova Execução" [level=2] [ref=e9]
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - text: Quantidade de cenários
+          - spinbutton "Quantidade de cenários" [ref=e12]: "5"
+        - generic [ref=e13]:
+          - text: Simulador do lead
+          - combobox "Simulador do lead" [ref=e14]:
+            - option "auto" [selected]
+            - option "rule"
+            - option "llm"
+        - generic [ref=e15]:
+          - text: Máximo de turnos
+          - spinbutton "Máximo de turnos" [ref=e16]: "6"
+        - button "Iniciar Testes" [disabled] [ref=e17]
+        - generic [ref=e18]: Job 60235204 • início 2026-05-12T15:33:12
+    - generic [ref=e19]:
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]: Status
+          - generic [ref=e24]: running
+        - generic [ref=e25]:
+          - generic [ref=e26]: Progresso
+          - generic [ref=e27]: 0%
+        - generic [ref=e28]:
+          - generic [ref=e29]: Concluídos
+          - generic [ref=e30]: 0/5
+        - generic [ref=e31]:
+          - generic [ref=e32]: Atual
+          - generic [ref=e33]: real-001 - A.K.B
+      - generic [ref=e36]:
+        - heading "Cenários" [level=2] [ref=e37]
+        - generic [ref=e39]: Sem resultados ainda.
+      - generic [ref=e41]:
+        - heading "Log" [level=2] [ref=e42]
+        - generic [ref=e43]: Job criado. [2026-05-12T15:33:12] Carregando cenários reais. [2026-05-12T15:33:12] 5 cenário(s) selecionado(s). [2026-05-12T15:33:12] Iniciado real-001 - A.K.B.

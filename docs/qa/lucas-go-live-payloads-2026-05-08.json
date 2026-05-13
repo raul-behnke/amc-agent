@@ -1,0 +1,165 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "endpoint": "/webhook/chat",
+  "qualification_endpoint_template": "/leads/{session_id}/qualification",
+  "scenarios": [
+    {
+      "id": "qa-c01",
+      "name": "Interesse simples com agendamento valido",
+      "setup": {
+        "veiculo_interesse": "Onix LT 1.4"
+      },
+      "messages": [
+        "Olá, pode sim!",
+        "Quero trocar meu Voyage 1998",
+        "Quero algo mais econômico",
+        "Vai ser financiado mesmo",
+        "Sou de Joinville",
+        "Posso passar aí às 17?",
+        "Pode ser amanhã às 09:00 então"
+      ]
+    },
+    {
+      "id": "qa-c02",
+      "name": "Troca com carro incompleto",
+      "setup": {
+        "veiculo_interesse": "Hyundai HB20"
+      },
+      "messages": [
+        "Oi, quero saber do HB20",
+        "Tenho um Gol"
+      ]
+    },
+    {
+      "id": "qa-c03",
+      "name": "Avaliacao por WhatsApp",
+      "messages": [
+        "Tenho um Gol 2012",
+        "Dá pra avaliar por WhatsApp mesmo?"
+      ]
+    },
+    {
+      "id": "qa-c04",
+      "name": "Compra sem troca",
+      "setup": {
+        "veiculo_interesse": "FIAT 500 1.4 EVO FLEX CULT 2014"
+      },
+      "messages": [
+        "Sim, por gentileza",
+        "Para comprar, eu não tenho carro kkk",
+        "Uso diário"
+      ]
+    },
+    {
+      "id": "qa-c05",
+      "name": "Pergunta financeira no meio do funil",
+      "messages": [
+        "Quero comprar",
+        "Uso diário",
+        "Financiar",
+        "Cartão, como que funciona?"
+      ]
+    },
+    {
+      "id": "qa-c06",
+      "name": "Entrada financeira como primeira mensagem",
+      "messages": [
+        "Vcs financiam com 5 mil de entrada?",
+        "Pra comprar msm"
+      ]
+    },
+    {
+      "id": "qa-c07",
+      "name": "Ambiguidade curta do lead",
+      "messages": [
+        "Sim tenho um Siena 2010",
+        "Sim",
+        "Troca o Siena"
+      ]
+    },
+    {
+      "id": "qa-c08",
+      "name": "Mensagens quebradas em sequencia",
+      "messages": [
+        "Jumirim",
+        "Sp"
+      ]
+    },
+    {
+      "id": "qa-c09",
+      "name": "Estoque indisponivel com sugestao similar",
+      "setup": {
+        "veiculo_interesse": "Volkswagen Gol 1.0 Mi Total Flex 8V 4p 2012/2013"
+      },
+      "messages": [
+        "Queria um Gol",
+        "Vocês não têm nem outro Gol?"
+      ]
+    },
+    {
+      "id": "qa-c10",
+      "name": "Consistencia de estoque",
+      "setup": {
+        "veiculo_interesse": "FIAT 500 1.4 EVO FLEX CULT 2014"
+      },
+      "messages": [
+        "Sim, por gentileza",
+        "Pode me mandar fotos?"
+      ]
+    },
+    {
+      "id": "qa-c11",
+      "name": "Disponibilidade objetiva",
+      "setup": {
+        "veiculo_interesse": "Renault Clio Sedan 1.6 16v Expression Hi-flex 4p"
+      },
+      "messages": [
+        "Você tem o carro aí ou vendeu?",
+        "Gostaria de ver esse Renault Clio Sedan"
+      ]
+    },
+    {
+      "id": "qa-c12",
+      "name": "Dia sem horario",
+      "messages": [
+        "Sou de Joinville sim",
+        "Posso ir segunda?"
+      ]
+    },
+    {
+      "id": "qa-c13",
+      "name": "Horario indisponivel com alternativas",
+      "messages": [
+        "Posso passar aí às 17?"
+      ]
+    },
+    {
+      "id": "qa-c14",
+      "name": "Audio sem transcricao util",
+      "messages": [
+        "> Voice Note <"
+      ]
+    },
+    {
+      "id": "qa-c15",
+      "name": "Lead responde fora de ordem",
+      "setup": {
+        "veiculo_interesse": "Volkswagen Gol 1.0 Mi Total Flex 8V 4p 2012/2013"
+      },
+      "messages": [
+        "Queria um Gol",
+        "Financiar",
+        "Sou de Concórdia",
+        "Mas vocês têm mesmo?"
+      ]
+    },
+    {
+      "id": "qa-c16",
+      "name": "Pedido explicito de humano",
+      "messages": [
+        "Quero falar com um consultor",
+        "Prefiro atendimento humano"
+      ]
+    }
+  ]
+}
