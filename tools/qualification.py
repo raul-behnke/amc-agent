@@ -76,10 +76,14 @@ def _state_snapshot(lead: LeadQualification) -> dict[str, Any]:
         "veiculo_interesse": data.get("veiculo_interesse"),
         "qualificacao": data.get("qualificacao"),
         "vehicle_focus": data["vehicle_focus"],
+        "vehicle_journey": data["vehicle_journey"],
         "lead_answers": data["lead_answers"],
         "conversation_summary": data.get("conversation_summary"),
         "completeness_score": lead.completeness_score(),
         "qualificacao_pendente": lead.get_missing_fields(),
+        "dados_troca_pendentes": lead.get_missing_trade_fields(),
+        "next_qualification_field": lead.next_qualification_field(),
+        "next_qualification_question": lead.next_qualification_question(),
     }
 
 
@@ -100,6 +104,10 @@ def registrar_estado(
     cambio: str | None = None,
     tem_troca: bool | None = None,
     veiculo_troca: str | None = None,
+    km_troca: str | None = None,
+    quitado_troca: bool | None = None,
+    estado_troca: str | None = None,
+    fotos_troca_recebidas: bool | None = None,
     motivo_troca: str | None = None,
     precisa_financiamento: bool | None = None,
     e_local: bool | None = None,
@@ -111,6 +119,13 @@ def registrar_estado(
     vehicle_focus_last_valid: str | None = None,
     alternatives_shown: list[Any] | None = None,
     active_filters: dict[str, Any] | None = None,
+    greeting_vehicle: str | None = None,
+    vehicle_mentions: list[Any] | None = None,
+    presented_vehicles: list[Any] | None = None,
+    current_vehicle_request: str | None = None,
+    photo_target_vehicle: str | None = None,
+    scheduling_target_vehicle: str | None = None,
+    qualification_target_vehicle: str | None = None,
 ) -> str:
     """
     Registra ou atualiza o estado factual da sessão atual.
@@ -197,6 +212,22 @@ def registrar_estado(
             lead.veiculo_troca = veiculo_troca
             updates["veiculo_troca"] = veiculo_troca
             _register_answer(lead, "veiculo_troca", veiculo_troca)
+    if km_troca is not None:
+        lead.km_troca = km_troca
+        updates["km_troca"] = km_troca
+        _register_answer(lead, "km_troca", km_troca)
+    if quitado_troca is not None:
+        lead.quitado_troca = quitado_troca
+        updates["quitado_troca"] = quitado_troca
+        _register_answer(lead, "quitado_troca", quitado_troca)
+    if estado_troca is not None:
+        lead.estado_troca = estado_troca
+        updates["estado_troca"] = estado_troca
+        _register_answer(lead, "estado_troca", estado_troca)
+    if fotos_troca_recebidas is not None:
+        lead.fotos_troca_recebidas = fotos_troca_recebidas
+        updates["fotos_troca_recebidas"] = fotos_troca_recebidas
+        _register_answer(lead, "fotos_troca_recebidas", fotos_troca_recebidas)
     if motivo_troca is not None:
         lead.motivo_troca = motivo_troca
         updates["motivo_troca"] = motivo_troca
@@ -220,8 +251,14 @@ def registrar_estado(
     if conversation_summary is not None:
         lead.conversation_summary = conversation_summary
         updates["conversation_summary"] = conversation_summary
+    if greeting_vehicle is not None:
+        lead.vehicle_journey.greeting_vehicle = greeting_vehicle
+        if not lead.vehicle_journey.primary_interest:
+            lead.vehicle_journey.primary_interest = greeting_vehicle
+            lead.veiculo_interesse = greeting_vehicle
+        updates["vehicle_journey.greeting_vehicle"] = greeting_vehicle
 
-    normalized_filters = active_filters or _normalize_vehicle_filters(
+    incoming_filters = active_filters or _normalize_vehicle_filters(
         faixa_preco=faixa_preco,
         ano_minimo=ano_minimo,
         cambio=cambio,
@@ -230,9 +267,11 @@ def registrar_estado(
         modelo_preferido=modelo_preferido,
         cidade=cidade,
     )
+    normalized_filters = dict(lead.vehicle_focus.active_filters or {})
+    normalized_filters.update(incoming_filters)
 
     focus_vehicle = vehicle_focus_current or veiculo_interesse or interesse
-    if focus_vehicle is not None or normalized_filters or alternatives_shown is not None:
+    if focus_vehicle is not None or incoming_filters or alternatives_shown is not None:
         lead.set_vehicle_focus(
             vehicle=focus_vehicle,
             active_filters=normalized_filters if normalized_filters else None,
@@ -247,6 +286,41 @@ def registrar_estado(
     if vehicle_focus_last_valid is not None:
         lead.vehicle_focus.last_valid = vehicle_focus_last_valid
         updates["vehicle_focus.last_valid"] = vehicle_focus_last_valid
+
+    if veiculo_interesse:
+        lead.register_vehicle_mentions([veiculo_interesse], source="veiculo_interesse")
+        updates["vehicle_journey.primary_interest"] = lead.vehicle_journey.primary_interest
+
+    if vehicle_mentions:
+        lead.register_vehicle_mentions(vehicle_mentions, source="mention")
+        updates["vehicle_journey.mentioned_count"] = len(lead.vehicle_journey.mentioned_vehicles)
+
+    presented_payload = presented_vehicles if presented_vehicles is not None else alternatives_shown
+    if presented_payload is not None:
+        lead.register_presented_vehicles(presented_payload, source="stock_search")
+        updates["vehicle_journey.presented_count"] = len(lead.vehicle_journey.presented_vehicles)
+        updates["vehicle_journey.last_presented_count"] = len(lead.vehicle_journey.last_presented_vehicles)
+
+    if any(
+        [
+            current_vehicle_request,
+            vehicle_focus_current,
+            photo_target_vehicle,
+            scheduling_target_vehicle,
+            qualification_target_vehicle,
+        ]
+    ):
+        lead.set_vehicle_targets(
+            current_request=current_vehicle_request,
+            current_focus=vehicle_focus_current,
+            photo_target=photo_target_vehicle,
+            scheduling_target=scheduling_target_vehicle,
+            qualification_target=qualification_target_vehicle,
+        )
+        updates["vehicle_journey.current_focus"] = lead.vehicle_journey.current_focus
+        updates["vehicle_journey.current_request"] = lead.vehicle_journey.current_request
+        updates["vehicle_journey.photo_target"] = lead.vehicle_journey.photo_target
+        updates["vehicle_journey.qualification_target"] = lead.vehicle_journey.qualification_target
 
     _refresh_status(lead)
 
@@ -278,6 +352,10 @@ def registrar_qualificacao(
     cambio: str | None = None,
     tem_troca: bool | None = None,
     veiculo_troca: str | None = None,
+    km_troca: str | None = None,
+    quitado_troca: bool | None = None,
+    estado_troca: str | None = None,
+    fotos_troca_recebidas: bool | None = None,
     motivo_troca: str | None = None,
     precisa_financiamento: bool | None = None,
     e_local: bool | None = None,
@@ -305,6 +383,10 @@ def registrar_qualificacao(
         cambio=cambio,
         tem_troca=tem_troca,
         veiculo_troca=veiculo_troca,
+        km_troca=km_troca,
+        quitado_troca=quitado_troca,
+        estado_troca=estado_troca,
+        fotos_troca_recebidas=fotos_troca_recebidas,
         motivo_troca=motivo_troca,
         precisa_financiamento=precisa_financiamento,
         e_local=e_local,
@@ -335,6 +417,10 @@ def consultar_qualificacao(session_id: str) -> str:
         "filled": filled,
         "lead_answers": lead.lead_answers,
         "vehicle_focus": lead.vehicle_focus.model_dump(),
+        "vehicle_journey": lead.vehicle_journey.model_dump(),
         "conversation_summary": lead.conversation_summary,
+        "dados_troca_pendentes": lead.get_missing_trade_fields(),
+        "next_qualification_field": lead.next_qualification_field(),
+        "next_qualification_question": lead.next_qualification_question(),
     }
     return json.dumps(snapshot, ensure_ascii=False)

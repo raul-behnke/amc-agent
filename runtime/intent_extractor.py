@@ -13,13 +13,17 @@ class QualificationFacts(BaseModel):
     intencao: Optional[str] = Field(None, description="Intenção: 'compra' ou 'troca de [modelo ano]'. Ex: 'troca de Gol 2011'.")
     tem_troca: Optional[bool] = Field(None, description="True se o lead mencionou ter carro para troca, perguntou se aceitam troca, ou informou modelo de troca.")
     veiculo_troca: Optional[str] = Field(None, description="Carro que o lead quer dar na troca (ano/modelo)")
+    km_troca: Optional[str] = Field(None, description="Quilometragem do carro de troca quando o lead informar (ex: '145 mil km').")
+    quitado_troca: Optional[bool] = Field(None, description="True se o lead disser que o carro de troca está quitado; False se disser que ainda não está.")
+    estado_troca: Optional[str] = Field(None, description="Estado geral ou avarias do carro de troca quando o lead descrever.")
+    fotos_troca_recebidas: Optional[bool] = Field(None, description="True apenas se o lead disser que está enviando ou já enviou fotos do carro de troca.")
     motivacao: Optional[str] = Field(None, description="Motivação da compra/troca (ex: 'preciso de mais espaço', 'carro antigo dando problema')")
     negociacao: Optional[str] = Field(None, description="Forma de pagamento desejada (ex: financiamento, à vista)")
     cidade: Optional[str] = Field(None, description="Cidade ou região do lead")
 
 class IntentExtraction(BaseModel):
     is_asking_for_vehicle: bool = Field(..., description="True apenas se o lead está pedindo para ver opções de veículos, preços ou características do estoque.")
-    vehicle_query: Optional[str] = Field(None, description="O modelo específico mencionado pelo lead. Se o lead pedir fotos de um carro específico (ex: 'fotos do Gol'), extraia 'Gol' aqui obrigatoriamente.")
+    vehicle_query: Optional[str] = Field(None, description="O modelo específico mais importante no turno atual. Se o lead pedir fotos de um carro específico (ex: 'fotos do Gol', 'fotos do Golzinho'), extraia 'Gol' aqui obrigatoriamente.")
     is_asking_for_photos: bool = Field(..., description="True APENAS se o lead pediu para RECEBER fotos do nosso estoque. False se o lead está enviando ou oferecendo fotos do carro dele.")
     is_accepting_info: bool = Field(..., description="True se o lead está aceitando/confirmando receber informações (ex: 'pode sim', 'claro', 'manda', 'quero saber', 'show'). False se está fazendo uma pergunta nova ou dando informação.")
     wants_human: bool = Field(..., description="True se o lead exigir um humano, gerente, ou estiver muito irritado.")
@@ -39,6 +43,10 @@ REGRAS DE INFERÊNCIA PERMITIDAS:
 - Se o lead pergunta 'aceitam troca?' ou diz 'tenho um Gol 2011' ou 'quero trocar': tem_troca=True.
 - Se o lead informa veículo de troca: intencao='troca de [modelo ano]'.
 - Se o lead diz 'quero comprar' sem mencionar troca: intencao='compra'.
+- Se o lead informar quilometragem do carro dele, preencha `km_troca`.
+- Se o lead disser que o carro está quitado ou não está quitado, preencha `quitado_troca`.
+- Se o lead descrever estado, avaria, detalhes de conservação do carro dele, preencha `estado_troca`.
+- Se o lead disser que vai mandar, está mandando, ou já mandou fotos do carro dele, preencha `fotos_troca_recebidas=True`.
 
 REGRAS PARA BUSCA DE VEÍCULOS E MOTIVAÇÃO:
 Se o contexto mostrar que a última pergunta foi sobre a MOTIVAÇÃO da compra/troca (ex: "Qual o motivo da troca?"), e o lead responder coisas como "quero algo mais estiloso", "quero um carro maior", "busco conforto", "para trabalho":
@@ -51,9 +59,15 @@ Se o agente apresentou várias opções (ex: HB20 2017 e HB20 2015) e o lead esc
 1. Preencha o `vehicle_query` com a referência completa do modelo escolhido (ex: "HB20 2015", "HB20 Automático").
 2. Se o lead pedir fotos, marque `is_asking_for_photos=True`.
 
+MÚLTIPLOS VEÍCULOS:
+- Se o lead mencionar dois carros no mesmo turno, mantenha `is_asking_for_vehicle=True`.
+- Em `vehicle_query`, extraia o veículo principal do pedido atual. Exemplo: "Também vi um Gol aí e quero saber se a CR-V ainda está disponível" -> `vehicle_query` deve ser "CR-V" porque é a pergunta ativa.
+- Diminutivos e apelidos contam como o modelo base. Exemplo: "Golzinho" -> `vehicle_query="Gol"`.
+
 REGRAS PARA FOTOS:
 - Se o lead diz 'tem fotos?', 'manda fotos', 'quero ver as fotos desse': is_asking_for_photos=True.
 - Se o lead diz 'vou mandar as fotos', 'já te envio as fotos', 'já encaminho as imagens': is_asking_for_photos=False (ele está enviando, não pedindo).
+- Quando o contexto recente estiver falando do carro de troca do lead e ele disser 'vou mandar as fotos' ou similar, marque também `qualification_facts.fotos_troca_recebidas=True`.
 
 Sua extração será usada pelo Runtime do sistema apenas para carregar o contexto antes da resposta do Vendedor.
 """

@@ -5,6 +5,7 @@ Inventory Tool — Consulta executora de estoque da AMC Veículos.
 import json
 import os
 import re
+import unicodedata
 from typing import Any
 
 from loguru import logger
@@ -41,6 +42,7 @@ GENERIC_INVENTORY_REQUEST_TOKENS = {
 
 PREFERENCE_MODES = {"newer", "cheaper", "automatic", "manual"}
 LLM_MODE_VALUES = {"single", "alternatives", "confirm", "vehicle_info"}
+FILTERABLE_VEHICLE_TYPES = {"hatch", "sedan", "suv", "picape", "pickup", "compacto"}
 
 
 def _format_price(price: int) -> str:
@@ -51,6 +53,189 @@ def _format_km(km: int) -> str:
     if km >= 999999:
         return "Consultar"
     return f"{km:,.0f} km".replace(",", ".")
+
+
+def _normalize_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", text or "")
+    ascii_text = "".join(char for char in normalized if not unicodedata.combining(char))
+    return ascii_text.lower().strip()
+
+
+def _compact_text(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", _normalize_text(text))
+
+
+def _tokenize_text(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", _normalize_text(text))
+
+
+def _vehicle_display_title(vehicle: dict[str, Any]) -> str:
+    return (
+        str(vehicle.get("titulo") or "").strip()
+        or " ".join(
+            part for part in [str(vehicle.get("marca") or "").strip(), str(vehicle.get("modelo") or "").strip()] if part
+        ).strip()
+    )
+
+
+def _vehicle_family_query(vehicle: dict[str, Any]) -> str:
+    return " ".join(
+        part for part in [str(vehicle.get("marca") or "").strip(), str(vehicle.get("modelo") or "").strip()] if part
+    ).strip() or _vehicle_display_title(vehicle)
+
+
+def _build_vehicle_aliases(vehicle: dict[str, Any]) -> set[str]:
+    aliases = {
+        _vehicle_display_title(vehicle),
+        _vehicle_family_query(vehicle),
+        str(vehicle.get("modelo") or "").strip(),
+    }
+
+    compact_model = _compact_text(str(vehicle.get("modelo") or ""))
+    if compact_model:
+        aliases.add(compact_model)
+
+    return {alias for alias in aliases if alias}
+
+
+def _token_matches_alias(token: str, alias: str) -> bool:
+    token_compact = _compact_text(token)
+    alias_compact = _compact_text(alias)
+    if not token_compact or not alias_compact:
+        return False
+    if token_compact == alias_compact:
+        return True
+
+    diminutive_suffixes = ("zinho", "zinha", "ao", "inha", "inho")
+    return len(alias_compact) >= 3 and token_compact.startswith(alias_compact) and token_compact[len(alias_compact):] in diminutive_suffixes
+
+
+def _match_vehicle_alias_in_text(vehicle: dict[str, Any], text: str) -> bool:
+    tokens = _tokenize_text(text)
+    normalized_text = _normalize_text(text)
+    compact_text = _compact_text(text)
+
+    for alias in _build_vehicle_aliases(vehicle):
+        alias_norm = _normalize_text(alias)
+        alias_compact = _compact_text(alias)
+        if not alias_compact:
+            continue
+        if alias_norm and alias_norm in normalized_text:
+            return True
+        if alias_compact and alias_compact in compact_text:
+            return True
+        if any(_token_matches_alias(token, alias) for token in tokens):
+            return True
+    return False
+
+
+def _dedupe_vehicle_candidates(vehicles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for vehicle in vehicles:
+        key = _vehicle_identity_key(vehicle) or _vehicle_display_title(vehicle).lower().strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(vehicle)
+    return deduped
+
+
+def _resolve_vehicle_from_candidates(request_text: str, candidate_vehicles: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not candidate_vehicles:
+        return None
+
+    vehicles = _dedupe_vehicle_candidates(candidate_vehicles)
+    if not vehicles:
+        return None
+
+    request_norm = _normalize_text(request_text)
+    year_match = re.search(r"\b(19|20)\d{2}\b", request_text)
+    if year_match:
+        year = int(year_match.group(0))
+        year_matches = [vehicle for vehicle in vehicles if int(vehicle.get("ano", 0) or 0) == year]
+        if len(year_matches) == 1:
+            return year_matches[0]
+
+    ordinal_map = {
+        "primeiro": 0,
+        "1o": 0,
+        "1": 0,
+        "segundo": 1,
+        "2o": 1,
+        "2": 1,
+        "terceiro": 2,
+        "3o": 2,
+        "3": 2,
+    }
+    for token, index in ordinal_map.items():
+        if token in request_norm and index < len(vehicles):
+            return vehicles[index]
+
+    if "mais barato" in request_norm:
+        return min(vehicles, key=lambda vehicle: int(vehicle.get("preco", 0) or 0))
+    if "mais novo" in request_norm:
+        return max(vehicles, key=lambda vehicle: int(vehicle.get("ano", 0) or 0))
+
+    alias_matches = [vehicle for vehicle in vehicles if _match_vehicle_alias_in_text(vehicle, request_text)]
+    if len(alias_matches) == 1:
+        return alias_matches[0]
+    if alias_matches:
+        alias_matches.sort(key=lambda vehicle: _score_vehicle_match(vehicle, request_text), reverse=True)
+        return alias_matches[0]
+
+    return None
+
+
+def detect_vehicle_mentions(text: str, inventory: list[dict[str, Any]] | None = None, limit: int = 3) -> list[str]:
+    if not text.strip():
+        return []
+
+    try:
+        stock = inventory if inventory is not None else fetch_inventory_sync()
+    except Exception as exc:
+        logger.error("Erro ao buscar estoque para detectar menções: {err}", err=str(exc))
+        return []
+
+    family_map: dict[str, tuple[str, dict[str, Any]]] = {}
+    for vehicle in stock:
+        family_query = _vehicle_family_query(vehicle)
+        family_key = family_query.lower().strip()
+        if not family_key:
+            continue
+        family_map.setdefault(family_key, (family_query, vehicle))
+
+    normalized_text = _normalize_text(text)
+    compact_text = _compact_text(text)
+    matches: list[tuple[int, int, str]] = []
+    for _, (family_query, vehicle) in family_map.items():
+        if not _match_vehicle_alias_in_text(vehicle, text):
+            continue
+        score = _score_vehicle_match(vehicle, text)[0]
+        alias_positions: list[int] = []
+        for alias in _build_vehicle_aliases(vehicle):
+            alias_norm = _normalize_text(alias)
+            alias_compact = _compact_text(alias)
+            if alias_norm and alias_norm in normalized_text:
+                alias_positions.append(normalized_text.index(alias_norm))
+            elif alias_compact and alias_compact in compact_text:
+                alias_positions.append(compact_text.index(alias_compact))
+        position = min(alias_positions) if alias_positions else 999999
+        matches.append((position, -score, family_query))
+
+    matches.sort(key=lambda item: (item[0], item[1], -len(item[2])))
+    deduped_queries: list[str] = []
+    seen: set[str] = set()
+    for _, _, family_query in matches:
+        key = family_query.lower().strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped_queries.append(family_query)
+        if len(deduped_queries) >= limit:
+            break
+
+    return deduped_queries
 
 
 
@@ -199,6 +384,7 @@ def _score_vehicle_match(vehicle: dict[str, Any], search_term: str) -> tuple[int
 def _serialize_vehicle(vehicle: dict[str, Any]) -> dict[str, Any]:
     price = int(vehicle.get("preco", 0) or 0)
     km = int(vehicle.get("quilometragem", 0) or 0)
+    imagens = vehicle.get("imagens", []) or []
     
     return {
         "vehicle_key": "|".join(
@@ -214,6 +400,7 @@ def _serialize_vehicle(vehicle: dict[str, Any]) -> dict[str, Any]:
         "quilometragem": km,
         "quilometragem_formatada": _format_km(km) if km > 0 else "Consultar",
         "cambio": vehicle.get("cambio"),
+        "imagens": [url for url in imagens if isinstance(url, str) and url.startswith("http")],
         "tem_fotos": len(vehicle.get("imagens") or []) > 0,
         "imagens_count": len(vehicle.get("imagens") or []),
         "destaque": bool(vehicle.get("destaque")),
@@ -386,6 +573,168 @@ def _normalize_mode(mode: str | None) -> str | None:
         return None
     value = mode.lower().strip()
     return value if value in LLM_MODE_VALUES else None
+
+
+def _normalize_prefer(prefer: str | None) -> str | None:
+    if not prefer:
+        return None
+    value = prefer.lower().strip()
+    return value if value in PREFERENCE_MODES else None
+
+
+def _normalize_cambio_value(cambio: str | None) -> str | None:
+    if not cambio:
+        return None
+    lowered = _normalize_text(cambio)
+    if "auto" in lowered:
+        return "Automático"
+    if "mec" in lowered or "manual" in lowered:
+        return "Mecânico"
+    return cambio.strip()
+
+
+def _coerce_year(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        year = int(value)
+    except (TypeError, ValueError):
+        return None
+    return year if year > 1900 else None
+
+
+def _build_filter_planner_prompt(
+    prompt_busca: str | None = None,
+    prompt_contexto: str | None = None,
+    perfil_cliente: str | None = None,
+    vehicle_focus: str | None = None,
+    reference_vehicle: str | None = None,
+    modelo: str | None = None,
+    marca: str | None = None,
+    faixa_preco: str | None = None,
+    tipo_veiculo: str | None = None,
+    ano_minimo: int | None = None,
+    cambio: str | None = None,
+    prefer: str | None = None,
+    modo: str | None = None,
+) -> str:
+    return "\n".join(
+        [
+            "CONTEXTO PARA MONTAR FILTROS DE ESTOQUE",
+            f"PROMPT_BUSCA={prompt_busca or ''}",
+            f"PROMPT_CONTEXTO={prompt_contexto or ''}",
+            f"PERFIL_CLIENTE={perfil_cliente or ''}",
+            f"VEHICLE_FOCUS={vehicle_focus or ''}",
+            f"REFERENCE_VEHICLE={reference_vehicle or ''}",
+            f"MODELO={modelo or ''}",
+            f"MARCA={marca or ''}",
+            f"FAIXA_PRECO={faixa_preco or ''}",
+            f"TIPO_VEICULO={tipo_veiculo or ''}",
+            f"ANO_MINIMO={ano_minimo or ''}",
+            f"CAMBIO={cambio or ''}",
+            f"PREFER={prefer or ''}",
+            f"MODO={modo or ''}",
+        ]
+    )
+
+
+def _plan_inventory_filters_with_llm(
+    prompt_busca: str | None = None,
+    prompt_contexto: str | None = None,
+    perfil_cliente: str | None = None,
+    vehicle_focus: str | None = None,
+    reference_vehicle: str | None = None,
+    modelo: str | None = None,
+    marca: str | None = None,
+    faixa_preco: str | None = None,
+    tipo_veiculo: str | None = None,
+    ano_minimo: int | None = None,
+    cambio: str | None = None,
+    prefer: str | None = None,
+    modo: str | None = None,
+) -> dict[str, Any] | None:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    model_id = os.getenv("INVENTORY_FILTER_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4.1-mini"
+    client = OpenAI(api_key=api_key)
+    system_prompt = (
+        "Você é um planner de filtros para busca de estoque automotivo. "
+        "Leia o contexto da conversa e converta o pedido do lead em filtros objetivos. "
+        "Retorne apenas JSON válido, sem markdown. "
+        "Não invente restrições. Só preencha um campo se o contexto realmente sustentar esse filtro."
+    )
+    schema = {
+        "search_term": "string ou null",
+        "modelo": "string ou null",
+        "marca": "string ou null",
+        "reference_vehicle": "string ou null",
+        "faixa_preco": "string ou null",
+        "tipo_veiculo": "hatch|sedan|suv|picape|pickup|compacto|null",
+        "ano_minimo": "integer ou null",
+        "cambio": "Automático|Mecânico|null",
+        "prefer": "newer|cheaper|automatic|manual|null",
+        "modo": "single|alternatives|confirm|vehicle_info|null",
+        "rationale": "string curta em PT-BR"
+    }
+    user_prompt = {
+        "contexto": _build_filter_planner_prompt(
+            prompt_busca=prompt_busca,
+            prompt_contexto=prompt_contexto,
+            perfil_cliente=perfil_cliente,
+            vehicle_focus=vehicle_focus,
+            reference_vehicle=reference_vehicle,
+            modelo=modelo,
+            marca=marca,
+            faixa_preco=faixa_preco,
+            tipo_veiculo=tipo_veiculo,
+            ano_minimo=ano_minimo,
+            cambio=cambio,
+            prefer=prefer,
+            modo=modo,
+        ),
+        "regras": [
+            "Se houver um veículo específico citado, priorize modelo e/ou search_term específicos.",
+            "Se o contexto indicar comparação dentro da mesma família, use reference_vehicle.",
+            "Se o lead não pediu filtro de preço, ano ou câmbio, deixe nulo.",
+            "Não transforme marca em modelo. Não misture modelo parecido como se fosse o mesmo.",
+            "Se o pedido for amplo, use search_term e tipo_veiculo quando fizer sentido.",
+        ],
+        "schema": schema,
+    }
+
+    try:
+        response = client.chat.completions.create(
+            model=model_id,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(user_prompt, ensure_ascii=False)},
+            ],
+        )
+        raw = response.choices[0].message.content or ""
+        data = _extract_json_payload(raw)
+        if isinstance(data, dict):
+            planned = {
+                "search_term": str(data.get("search_term")).strip() if data.get("search_term") else None,
+                "modelo": str(data.get("modelo")).strip() if data.get("modelo") else None,
+                "marca": str(data.get("marca")).strip() if data.get("marca") else None,
+                "reference_vehicle": str(data.get("reference_vehicle")).strip() if data.get("reference_vehicle") else None,
+                "faixa_preco": str(data.get("faixa_preco")).strip() if data.get("faixa_preco") else None,
+                "tipo_veiculo": str(data.get("tipo_veiculo")).strip().lower() if data.get("tipo_veiculo") else None,
+                "ano_minimo": _coerce_year(data.get("ano_minimo")),
+                "cambio": _normalize_cambio_value(data.get("cambio")),
+                "prefer": _normalize_prefer(data.get("prefer")),
+                "modo": _normalize_mode(data.get("modo")),
+                "rationale": str(data.get("rationale")).strip() if data.get("rationale") else None,
+            }
+            if planned["tipo_veiculo"] and planned["tipo_veiculo"] not in FILTERABLE_VEHICLE_TYPES:
+                planned["tipo_veiculo"] = None
+            return planned
+    except Exception as exc:
+        logger.warning("Fallback local na montagem de filtros do estoque | err={err}", err=str(exc))
+
+    return None
 
 
 def _build_search_brief(
@@ -628,6 +977,31 @@ def resolve_vehicle_for_photo_request(vehicle_query: str, request_text: str = ""
     return matches[0]
 
 
+def resolve_vehicle_target(
+    request_text: str,
+    explicit_query: str | None = None,
+    candidate_vehicles: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    candidates = candidate_vehicles or []
+    explicit = (explicit_query or "").strip()
+
+    if explicit and candidates:
+        explicit_match = _resolve_vehicle_from_candidates(explicit, candidates)
+        if explicit_match:
+            return explicit_match
+
+    if request_text and candidates:
+        request_match = _resolve_vehicle_from_candidates(request_text, candidates)
+        if request_match:
+            return request_match
+
+    search_seed = explicit or request_text
+    if not search_seed.strip():
+        return None
+
+    return resolve_vehicle_for_photo_request(search_seed, request_text=request_text)
+
+
 def get_vehicle_photo_urls(vehicle_query: str, limit: int = 10) -> list[str]:
     if not vehicle_query.strip():
         return []
@@ -638,6 +1012,19 @@ def get_vehicle_photo_urls(vehicle_query: str, limit: int = 10) -> list[str]:
 
     imagens = match.get("imagens", []) or []
     return [url for url in imagens[:limit] if isinstance(url, str) and url.startswith("http")]
+
+
+def buscar_fotos_veiculo(vehicle_query: str, limit: int = 10) -> str:
+    photos = get_vehicle_photo_urls(vehicle_query, limit=limit)
+    return json.dumps(
+        {
+            "ok": bool(photos),
+            "vehicle_query": vehicle_query,
+            "photo_count": len(photos),
+            "photos": photos,
+        },
+        ensure_ascii=False,
+    )
 
 
 
@@ -664,17 +1051,12 @@ def consultar_estoque(
     """
     Consulta o estoque real da AMC Veículos e devolve resultado estruturado.
     """
-    normalized_prefer = (prefer or "").lower().strip() or None
+    normalized_prefer = _normalize_prefer(prefer)
     normalized_mode = _normalize_mode(modo)
     if normalized_prefer and normalized_prefer not in PREFERENCE_MODES:
         return json.dumps({"ok": False, "error": "prefer_invalido"}, ensure_ascii=False)
 
-    if normalized_prefer == "automatic" and not cambio:
-        cambio = "Automático"
-    elif normalized_prefer == "manual" and not cambio:
-        cambio = "Mecânico"
-
-    search_brief = _build_search_brief(
+    planned_filters = _plan_inventory_filters_with_llm(
         prompt_busca=prompt_busca,
         prompt_contexto=prompt_contexto,
         perfil_cliente=perfil_cliente,
@@ -688,30 +1070,64 @@ def consultar_estoque(
         cambio=cambio,
         prefer=normalized_prefer,
         modo=normalized_mode,
+    ) or {}
+
+    effective_modelo = planned_filters.get("modelo") or modelo
+    effective_marca = planned_filters.get("marca") or marca
+    effective_reference_vehicle = planned_filters.get("reference_vehicle") or reference_vehicle
+    effective_faixa_preco = planned_filters.get("faixa_preco") or faixa_preco
+    effective_tipo_veiculo = planned_filters.get("tipo_veiculo") or tipo_veiculo
+    effective_ano_minimo = planned_filters.get("ano_minimo") or ano_minimo
+    effective_cambio = planned_filters.get("cambio") or cambio
+    effective_prefer = planned_filters.get("prefer") or normalized_prefer
+    effective_mode = planned_filters.get("modo") or normalized_mode
+    planned_search_term = planned_filters.get("search_term")
+
+    if effective_prefer == "automatic" and not effective_cambio:
+        effective_cambio = "Automático"
+    elif effective_prefer == "manual" and not effective_cambio:
+        effective_cambio = "Mecânico"
+
+    search_brief = _build_search_brief(
+        prompt_busca=prompt_busca,
+        prompt_contexto=prompt_contexto,
+        perfil_cliente=perfil_cliente,
+        vehicle_focus=vehicle_focus,
+        reference_vehicle=effective_reference_vehicle,
+        modelo=effective_modelo,
+        marca=effective_marca,
+        faixa_preco=effective_faixa_preco,
+        tipo_veiculo=effective_tipo_veiculo,
+        ano_minimo=effective_ano_minimo,
+        cambio=effective_cambio,
+        prefer=effective_prefer,
+        modo=effective_mode,
     )
-    search_term = " ".join(
+    fallback_search_term = " ".join(
         part
         for part in (
             prompt_busca,
             prompt_contexto,
             perfil_cliente,
             vehicle_focus,
-            modelo,
-            marca,
-            reference_vehicle,
+            effective_modelo,
+            effective_marca,
+            effective_reference_vehicle,
         )
         if part
     ).strip()
+    search_term = planned_search_term or fallback_search_term
 
     logger.info(
-        "Consultando estoque | brief={brief} | faixa={f} | tipo={tipo} | ano_minimo={ano} | reference={ref} | prefer={prefer} | modo={modo}",
+        "Consultando estoque | brief={brief} | faixa={f} | tipo={tipo} | ano_minimo={ano} | reference={ref} | prefer={prefer} | modo={modo} | planner={planner}",
         brief=(search_brief[:180] if search_brief else ""),
-        f=faixa_preco,
-        tipo=tipo_veiculo,
-        ano=ano_minimo,
-        ref=reference_vehicle,
-        prefer=normalized_prefer,
-        modo=normalized_mode,
+        f=effective_faixa_preco,
+        tipo=effective_tipo_veiculo,
+        ano=effective_ano_minimo,
+        ref=effective_reference_vehicle,
+        prefer=effective_prefer,
+        modo=effective_mode,
+        planner=(planned_filters.get("rationale") if planned_filters else "fallback_local"),
     )
 
     has_query_context = any(
@@ -721,14 +1137,14 @@ def consultar_estoque(
             prompt_apresentacao,
             perfil_cliente,
             vehicle_focus,
-            modelo,
-            marca,
-            faixa_preco,
-            tipo_veiculo,
-            ano_minimo is not None,
-            cambio,
-            reference_vehicle,
-            normalized_prefer,
+            effective_modelo,
+            effective_marca,
+            effective_faixa_preco,
+            effective_tipo_veiculo,
+            effective_ano_minimo is not None,
+            effective_cambio,
+            effective_reference_vehicle,
+            effective_prefer,
         ]
     )
     if not has_query_context:
@@ -740,16 +1156,20 @@ def consultar_estoque(
         logger.error("Erro GHL: {err}", err=str(exc))
         return json.dumps({"ok": False, "error": "estoque_indisponivel"}, ensure_ascii=False)
 
-    resolved_reference = _resolve_reference_vehicle(inventory, reference_vehicle)
+    resolved_reference = _resolve_reference_vehicle(inventory, effective_reference_vehicle)
     if not resolved_reference and vehicle_focus:
         resolved_reference = _resolve_reference_vehicle(inventory, vehicle_focus)
     ignored_vehicle_keys = _normalize_ignored_vehicle_keys(
         veiculos_ignorados=veiculos_ignorados,
         reference_vehicle=resolved_reference,
-        mode=normalized_mode,
-        prefer=normalized_prefer,
+        mode=effective_mode,
+        prefer=effective_prefer,
     )
     if resolved_reference and not search_term:
+        reference_model = str(resolved_reference.get("modelo", "")).strip()
+        reference_brand = str(resolved_reference.get("marca", "")).strip()
+        search_term = " ".join(part for part in (reference_brand, reference_model) if part).strip()
+    elif resolved_reference and effective_reference_vehicle and not prompt_busca and not planned_search_term and effective_prefer:
         reference_model = str(resolved_reference.get("modelo", "")).strip()
         reference_brand = str(resolved_reference.get("marca", "")).strip()
         search_term = " ".join(part for part in (reference_brand, reference_model) if part).strip()
@@ -757,22 +1177,22 @@ def consultar_estoque(
     hard_matches = _filter_inventory(
         inventory=inventory,
         search_term=search_term if not prompt_busca else "",
-        faixa_preco=faixa_preco,
-        tipo_veiculo=tipo_veiculo,
-        ano_minimo=ano_minimo,
-        cambio=cambio,
+        faixa_preco=effective_faixa_preco,
+        tipo_veiculo=effective_tipo_veiculo,
+        ano_minimo=effective_ano_minimo,
+        cambio=effective_cambio,
         reference_vehicle=resolved_reference,
     )
     hard_matches = _sort_inventory_results(
         hard_matches,
         search_term=search_term,
-        prefer=normalized_prefer,
+        prefer=effective_prefer,
         reference_vehicle=resolved_reference,
     )
     hard_matches = _dedupe_vehicles(hard_matches)
     hard_matches = _exclude_ignored_vehicles(hard_matches, ignored_vehicle_keys)
 
-    retrieval_query = search_brief or search_term or modelo or marca or reference_vehicle or ""
+    retrieval_query = search_brief or search_term or effective_modelo or effective_marca or effective_reference_vehicle or ""
     retrieval_pool = _inventory_retrieval_pool(
         inventory=inventory,
         search_brief=retrieval_query,
@@ -788,17 +1208,17 @@ def consultar_estoque(
         search_brief=search_brief or retrieval_query,
         candidates=candidate_source or hard_matches,
         limite=limite,
-        forced_mode=normalized_mode,
+        forced_mode=effective_mode,
     )
 
     selected_keys: list[str] = []
-    response_mode = normalized_mode
+    response_mode = effective_mode
     headline = None
     summary = None
     reasons: dict[str, str] = {}
 
     if isinstance(llm_selection, dict):
-        response_mode = _normalize_mode(str(llm_selection.get("response_mode") or normalized_mode)) or response_mode
+        response_mode = _normalize_mode(str(llm_selection.get("response_mode") or effective_mode)) or response_mode
         headline = llm_selection.get("headline")
         summary = llm_selection.get("summary")
         selected_keys = [
@@ -812,8 +1232,8 @@ def consultar_estoque(
             if str(key).strip()
         }
 
-    if normalized_mode:
-        response_mode = normalized_mode
+    if effective_mode:
+        response_mode = effective_mode
 
     if response_mode in {"single", "confirm", "vehicle_info"}:
         selected_keys = selected_keys[:1]
@@ -893,22 +1313,24 @@ def consultar_estoque(
         {
             "ok": True,
             "query": {
-                "modelo": modelo,
-                "marca": marca,
-                "faixa_preco": faixa_preco,
-                "tipo_veiculo": tipo_veiculo,
-                "ano_minimo": ano_minimo,
-                "cambio": cambio,
-                "reference_vehicle": reference_vehicle,
-                "prefer": normalized_prefer,
+                "modelo": effective_modelo,
+                "marca": effective_marca,
+                "faixa_preco": effective_faixa_preco,
+                "tipo_veiculo": effective_tipo_veiculo,
+                "ano_minimo": effective_ano_minimo,
+                "cambio": effective_cambio,
+                "reference_vehicle": effective_reference_vehicle,
+                "prefer": effective_prefer,
                 "prompt_busca": prompt_busca,
                 "prompt_contexto": prompt_contexto,
                 "prompt_apresentacao": prompt_apresentacao,
                 "perfil_cliente": perfil_cliente,
                 "vehicle_focus": vehicle_focus,
-                "modo": normalized_mode,
+                "modo": effective_mode,
                 "limite": limite,
                 "veiculos_ignorados": veiculos_ignorados,
+                "search_term": search_term,
+                "planner_filters": planned_filters or None,
             },
             "count": len(serialized_matches),
             "matches": serialized_matches,
@@ -929,15 +1351,16 @@ def consultar_estoque(
                 "cards": selected_pool,
                 "fallback_cards": fallback_matches,
                 "selection_hints": {
-                    "prefer": normalized_prefer,
+                    "prefer": effective_prefer,
+                    "planner_filters": planned_filters or None,
                     "search_term": search_term,
-                    "reference_vehicle": reference_vehicle,
+                    "reference_vehicle": effective_reference_vehicle,
                     "search_brief": search_brief,
                     "filter_summary": {
-                        "faixa_preco": faixa_preco,
-                        "tipo_veiculo": tipo_veiculo,
-                        "ano_minimo": ano_minimo,
-                        "cambio": cambio,
+                        "faixa_preco": effective_faixa_preco,
+                        "tipo_veiculo": effective_tipo_veiculo,
+                        "ano_minimo": effective_ano_minimo,
+                        "cambio": effective_cambio,
                     },
                 },
             },

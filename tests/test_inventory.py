@@ -4,10 +4,12 @@ import unittest
 from unittest.mock import patch
 
 from tools.inventory import (
+    detect_vehicle_mentions,
     _match_vehicle_flexible,
     buscar_fotos_veiculo,
     consultar_estoque,
     infer_vehicle_interest_from_text,
+    resolve_vehicle_target,
 )
 
 
@@ -23,6 +25,52 @@ class InventoryTests(unittest.TestCase):
 
         self.assertTrue(_match_vehicle_flexible(gol, "Gol"))
         self.assertFalse(_match_vehicle_flexible(golf, "Gol"))
+
+    def test_detect_vehicle_mentions_encontra_multiplos_modelos_no_mesmo_turno(self) -> None:
+        inventory = [
+            {"marca": "Honda", "modelo": "CR-V", "titulo": "Honda CR-V EXL 2.0", "ano": 2015, "preco": 87900, "quilometragem": 98000, "cambio": "Automático"},
+            {"marca": "Volkswagen", "modelo": "Gol", "titulo": "Volkswagen Gol 1.6", "ano": 2019, "preco": 48900, "quilometragem": 62000, "cambio": "Manual"},
+            {"marca": "Volkswagen", "modelo": "Golf", "titulo": "Volkswagen Golf Highline 1.4", "ano": 2018, "preco": 89900, "quilometragem": 55000, "cambio": "Automático"},
+        ]
+
+        with patch("tools.inventory.fetch_inventory_sync", return_value=inventory):
+            mentions = detect_vehicle_mentions("Também vi um Gol aí e queria saber se a CR-V ainda está disponível")
+
+        self.assertEqual(mentions, ["Volkswagen Gol", "Honda CR-V"])
+
+    def test_resolve_vehicle_target_entende_diminutivo_golzinho(self) -> None:
+        candidate_vehicles = [
+            {"titulo": "Honda CR-V EXL 2.0", "marca": "Honda", "modelo": "CR-V", "ano": 2015, "preco": 87900, "quilometragem": 98000, "cambio": "Automático"},
+            {"titulo": "Volkswagen Gol 1.6", "marca": "Volkswagen", "modelo": "Gol", "ano": 2019, "preco": 48900, "quilometragem": 62000, "cambio": "Manual"},
+        ]
+
+        resolved = resolve_vehicle_target(
+            request_text="Tem fotos do Golzinho?",
+            explicit_query="Gol",
+            candidate_vehicles=candidate_vehicles,
+        )
+
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved["modelo"], "Gol")
+        self.assertEqual(resolved["titulo"], "Volkswagen Gol 1.6")
+
+    def test_resolve_vehicle_target_entende_referencia_por_ano_e_posicao(self) -> None:
+        candidate_vehicles = [
+            {"titulo": "Hyundai HB20 Comfort 1.0", "marca": "Hyundai", "modelo": "HB20", "ano": 2015, "preco": 43900, "quilometragem": 92000, "cambio": "Manual"},
+            {"titulo": "Hyundai HB20 Evolution 1.0", "marca": "Hyundai", "modelo": "HB20", "ano": 2020, "preco": 56900, "quilometragem": 62000, "cambio": "Manual"},
+        ]
+
+        resolved_year = resolve_vehicle_target(
+            request_text="Tem fotos desse 2015?",
+            candidate_vehicles=candidate_vehicles,
+        )
+        resolved_first = resolve_vehicle_target(
+            request_text="Me manda do primeiro",
+            candidate_vehicles=candidate_vehicles,
+        )
+
+        self.assertEqual(resolved_year["ano"], 2015)
+        self.assertEqual(resolved_first["ano"], 2015)
 
     def test_consultar_estoque_sem_termo_retorna_erro_de_tool(self) -> None:
         result = json.loads(consultar_estoque())
@@ -277,6 +325,44 @@ class InventoryTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["matches"][0]["cambio"], "Automático")
+
+    def test_consultar_estoque_aplica_filtros_montados_por_ia(self) -> None:
+        inventory = [
+            {"marca": "Jeep", "modelo": "Renegade", "titulo": "Jeep Renegade Sport 1.8", "ano": 2019, "preco": 71900, "quilometragem": 69000, "cambio": "Mecânico"},
+            {"marca": "Jeep", "modelo": "Renegade", "titulo": "Jeep Renegade Longitude 1.8", "ano": 2021, "preco": 78900, "quilometragem": 55000, "cambio": "Automático"},
+            {"marca": "Hyundai", "modelo": "HB20", "titulo": "Hyundai HB20 Evolution 1.0", "ano": 2022, "preco": 66900, "quilometragem": 48000, "cambio": "Automático"},
+        ]
+        with patch("tools.inventory.fetch_inventory_sync", return_value=inventory), patch(
+            "tools.inventory._plan_inventory_filters_with_llm",
+            return_value={
+                "search_term": "Jeep Renegade",
+                "modelo": "Renegade",
+                "marca": "Jeep",
+                "reference_vehicle": None,
+                "faixa_preco": None,
+                "tipo_veiculo": "suv",
+                "ano_minimo": 2020,
+                "cambio": "Automático",
+                "prefer": "newer",
+                "modo": "single",
+                "rationale": "Lead quer um SUV automático mais novo.",
+            },
+        ):
+            result = json.loads(
+                consultar_estoque(
+                    prompt_busca="quero um suv automático mais novo",
+                    perfil_cliente="Lead quer um Jeep",
+                )
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["query"]["modelo"], "Renegade")
+        self.assertEqual(result["query"]["marca"], "Jeep")
+        self.assertEqual(result["query"]["tipo_veiculo"], "suv")
+        self.assertEqual(result["query"]["ano_minimo"], 2020)
+        self.assertEqual(result["query"]["cambio"], "Automático")
+        self.assertEqual(result["query"]["planner_filters"]["prefer"], "newer")
+        self.assertEqual(result["matches"][0]["titulo"], "Jeep Renegade Longitude 1.8")
 
     def test_busca_fotos_veiculo_retorna_payload_estruturado(self) -> None:
         inventory = [

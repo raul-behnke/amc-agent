@@ -4,41 +4,34 @@ from prompts.lucas_sdr import LUCAS_INSTRUCTIONS
 
 
 class PromptRulesTests(unittest.TestCase):
-    def test_prompt_orients_qualification_after_objective_request(self) -> None:
+    def test_prompt_reforca_resposta_direta_e_qualificacao(self) -> None:
         full_text = "\n".join(LUCAS_INSTRUCTIONS)
 
-        self.assertIn("Depois de responder uma solicitação objetiva do lead", full_text)
-        self.assertIn("Depois de enviar fotos", full_text)
-        self.assertIn("Evite repetir mecanicamente o que o lead acabou de dizer.", full_text)
+        self.assertIn("RESPOSTA DIRETA", full_text)
+        self.assertIn("ESTRUTURA DE CADA TURNO", full_text)
+        self.assertIn("Faça UMA pergunta comercial objetiva", full_text)
 
-    def test_prompt_orients_llm_to_analyze_inventory_options(self) -> None:
+    def test_prompt_reforca_ordem_da_qualificacao_de_troca(self) -> None:
         full_text = "\n".join(LUCAS_INSTRUCTIONS)
 
-        self.assertIn("Use consultar_estoque com prompt_busca, prompt_contexto, perfil_cliente, vehicle_focus e modo sempre que possível.", full_text)
-        self.assertIn("Se a intenção for comparar carros, use modo='alternatives'.", full_text)
-        self.assertIn("Se a tool devolver presentation.cards ou selected_vehicle, trate como dados estruturados", full_text)
-        self.assertIn("candidate_pool", full_text)
+        self.assertIn("modelo/ano, km, quitado, estado, fotos", full_text)
+        self.assertIn("siga esta sequência sem pular etapas", full_text)
+        self.assertIn("DADOS_TROCA_PENDENTES", full_text)
 
-    def test_prompt_orients_immediate_stock_search_on_filters(self) -> None:
+    def test_prompt_proibe_perguntas_financeiras_fora_do_fluxo(self) -> None:
         full_text = "\n".join(LUCAS_INSTRUCTIONS)
 
-        self.assertIn("use consultar_estoque imediatamente", full_text)
-        self.assertIn("a primeira resposta deve mostrar o estoque", full_text)
+        self.assertIn("Qual valor você pretende financiar?", full_text)
+        self.assertIn("Quanto quer dar de entrada?", full_text)
+        self.assertIn("Qual parcela cabe no seu bolso?", full_text)
+        self.assertIn("qual valor pretende pagar por mês?", full_text.lower())
 
-    def test_prompt_orients_proactive_photo_followup(self) -> None:
+    def test_prompt_orienta_resposta_para_parcelas_com_troca_pendente(self) -> None:
         full_text = "\n".join(LUCAS_INSTRUCTIONS)
 
-        self.assertIn("Depois de enviar fotos, faça uma pergunta proativa e objetiva de preferência ou qualificação.", full_text)
-        self.assertIn("Evite perguntas genéricas como 'quer mais detalhes?'", full_text)
-
-    def test_prompt_orients_exact_vehicle_matching_from_context(self) -> None:
-        full_text = "\n".join(LUCAS_INSTRUCTIONS)
-
-        self.assertIn("VEHICLE_FOCUS_ALTERNATIVES_JSON", full_text)
-        self.assertIn("use esse histórico para identificar exatamente qual opção o lead está citando", full_text)
-        self.assertIn("não volte para o veículo genérico em foco", full_text)
-        self.assertIn("veiculos_ignorados", full_text)
-        self.assertIn("mesma alternativa exata usada nas fotos", full_text)
+        self.assertIn("Se o lead perguntar sobre parcelas do restante", full_text)
+        self.assertIn("primeiro precisamos avaliar o carro de troca", full_text)
+        self.assertIn("só então simular melhor as parcelas", full_text)
 
 
 if __name__ == "__main__":
