@@ -33,6 +33,13 @@ class PromptRulesTests(unittest.TestCase):
         self.assertIn("primeiro precisamos avaliar o carro de troca", full_text)
         self.assertIn("só então simular melhor as parcelas", full_text)
 
+    def test_prompt_exige_confirmacao_real_do_agendamento(self) -> None:
+        full_text = "\n".join(LUCAS_INSTRUCTIONS)
+
+        self.assertIn("creation_verified=true", full_text)
+        self.assertIn("suggested_slots", full_text)
+        self.assertIn("cliente_prefere_whatsapp", full_text)
+
 
 if __name__ == "__main__":
     unittest.main()

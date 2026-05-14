@@ -120,9 +120,9 @@ def _match_vehicle_alias_in_text(vehicle: dict[str, Any], text: str) -> bool:
         alias_compact = _compact_text(alias)
         if not alias_compact:
             continue
-        if alias_norm and alias_norm in normalized_text:
+        if alias_norm and len(alias_compact) >= 3 and alias_norm in normalized_text:
             return True
-        if alias_compact and alias_compact in compact_text:
+        if alias_compact and len(alias_compact) >= 4 and alias_compact in compact_text:
             return True
         if any(_token_matches_alias(token, alias) for token in tokens):
             return True
@@ -245,18 +245,23 @@ def _match_vehicle_flexible(vehicle: dict[str, Any], search_term: str) -> bool:
     if not search_term:
         return True
 
-    def normalize(t: str) -> str:
-        return re.sub(r"[^a-z0-9]", "", t.lower())
+    term = _compact_text(search_term)
+    raw_search = _normalize_text(search_term)
+    v_marca = _compact_text(str(vehicle.get("marca", "")))
+    v_modelo = _compact_text(str(vehicle.get("modelo", "")))
+    v_titulo = _compact_text(str(vehicle.get("titulo", "")))
+    v_marca_norm = _normalize_text(str(vehicle.get("marca", "")))
+    v_modelo_norm = _normalize_text(str(vehicle.get("modelo", "")))
+    v_titulo_norm = _normalize_text(str(vehicle.get("titulo", "")))
 
-    term = normalize(search_term)
-    v_marca = normalize(str(vehicle.get("marca", "")))
-    v_modelo = normalize(str(vehicle.get("modelo", "")))
-    v_titulo = normalize(str(vehicle.get("titulo", "")))
-
-    if term in v_titulo or term in v_modelo or term in v_marca:
+    if term and term in {v_titulo, v_modelo, v_marca}:
+        return True
+    if raw_search and raw_search in {v_titulo_norm, v_modelo_norm, v_marca_norm}:
+        return True
+    if len(term) >= 4 and term in v_titulo:
         return True
 
-    words = set(re.findall(r"\w+", term))
+    words = set(re.findall(r"[a-z0-9]+", raw_search))
     ignore = {"flex", "12v", "16v", "plus", "comf", "comfort", "style", "1", "0", "6", "8", "2"}
     important_words = words - ignore
     if not important_words:
@@ -266,8 +271,8 @@ def _match_vehicle_flexible(vehicle: dict[str, Any], search_term: str) -> bool:
         if len(word) < 2:
             continue
         v_ano = str(vehicle.get("ano", ""))
-        if (re.search(rf"\b{re.escape(word)}\b", v_titulo) or 
-            re.search(rf"\b{re.escape(word)}\b", v_modelo) or
+        if (re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", v_titulo_norm) or
+            re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", v_modelo_norm) or
             word == v_ano):
             return True
     return False

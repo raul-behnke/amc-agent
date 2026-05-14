@@ -5,6 +5,7 @@ Agente de pré-qualificação comercial automotiva.
 Utiliza Agno como runtime de agente e SqliteDb para persistência de sessão.
 """
 
+import json
 import os
 
 from agno.agent import Agent
@@ -13,8 +14,8 @@ from agno.models.openai import OpenAIChat
 
 from prompts.lucas_sdr import LUCAS_DESCRIPTION, LUCAS_INSTRUCTIONS
 from tools.faq import consultar_faq
-from tools.qualification import consultar_qualificacao
-from tools.crm import sincronizar_com_crm, escalonar_lead
+from tools.qualification import registrar_estado
+from tools.crm import escalonar_lead
 from tools.calendar import buscar_horarios_livres, agendar_visita
 
 # ---------------------------------------------------------------------------
@@ -45,20 +46,29 @@ def _make_agent_tools(session_id: str, contact_id: str | None = None, conversati
         """
         if not contact_id or not conversation_id:
             return "Erro: contact_id ou conversation_id não disponíveis para escalonamento."
-        return escalonar_lead(
+        result = escalonar_lead(
             session_id=session_id,
             contact_id=contact_id,
             conversation_id=conversation_id,
             motivo=motivo,
             mensagem_despedida=mensagem_despedida,
         )
+        try:
+            payload = json.loads(result)
+        except json.JSONDecodeError:
+            return result
+
+        if payload.get("ok"):
+            registrar_estado(session_id=session_id, motivo_handoff=motivo)
+        return result
 
     def _agendar_visita(data_hora_iso: str, nome: str, email: str = "", telefone: str = "") -> str:
         """
         Realiza o agendamento oficial no calendário do GHL.
 
         Use SOMENTE quando o lead confirmar data e horário exatos para visita.
-        Antes de agendar, use buscar_horarios_livres para mostrar as opções.
+        Antes de agendar, use buscar_horarios_livres para verificar a disponibilidade.
+        Só confirme ao lead se a resposta vier com ok=true e creation_verified=true.
 
         Args:
             data_hora_iso: Data e horário no formato ISO (ex: 2026-05-09T10:00:00).
@@ -66,13 +76,24 @@ def _make_agent_tools(session_id: str, contact_id: str | None = None, conversati
             email: Email do lead (opcional).
             telefone: Telefone do lead (opcional, o sistema já possui).
         """
-        return agendar_visita(
+        result = agendar_visita(
             data_hora_iso=data_hora_iso,
             nome=nome,
             email=email,
             telefone=telefone,
             contact_id=contact_id or "",
         )
+        try:
+            payload = json.loads(result)
+        except json.JSONDecodeError:
+            return result
+
+        if payload.get("ok") and payload.get("creation_verified") and payload.get("start_time"):
+            registrar_estado(
+                session_id=session_id,
+                data_visita=payload["start_time"],
+            )
+        return result
 
     return [
         _escalonar_lead,

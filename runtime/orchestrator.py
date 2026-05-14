@@ -24,6 +24,17 @@ from tools.inventory import consultar_estoque, detect_vehicle_mentions, get_vehi
 from runtime.intent_extractor import extract_intent_from_message
 
 INITIAL_GREETING_MARKER = "[SAUDAÇÃO INICIAL]"
+WHATSAPP_CONTINUATION_PATTERNS = (
+    "continuar pelo whatsapp",
+    "seguir pelo whatsapp",
+    "falar pelo whatsapp",
+    "resolvemos por whatsapp",
+    "ver por whatsapp",
+    "prefiro pelo whatsapp",
+    "quero pelo whatsapp",
+    "sem agendar",
+    "sem visita",
+)
 
 
 def _normalize_vehicle_text(value: str) -> str:
@@ -62,6 +73,13 @@ def _is_exact_model_match(search_query: str, vehicle: dict) -> bool:
     if not query_model_words and (query_tokens & marca_words):
         return True
     return False
+
+
+def _wants_whatsapp_continuation(text: str) -> bool:
+    normalized = _normalize_vehicle_text(text)
+    if not normalized:
+        return False
+    return any(_normalize_vehicle_text(pattern) in normalized for pattern in WHATSAPP_CONTINUATION_PATTERNS)
 
 
 def _detect_unanswered(ghl_messages: list[dict]) -> list[str]:
@@ -244,7 +262,6 @@ def _build_stock_injection(filtered_payload: dict | None, search_query: str, fal
 
 def _build_session_context(session_id: str) -> str:
     lead = _get_lead(session_id)
-    state_payload = lead.to_dict()
 
     context_lines = [
         "[CONTEXTO SESSAO]",
@@ -391,7 +408,9 @@ async def process_message(
             registrar_qualificacao(session_id=session_id, **facts)
             system_injections.append(f"O SISTEMA IDENTIFICOU E SALVOU FATOS NOVOS: {json.dumps(facts, ensure_ascii=False)}")
 
-        if intent.visit_intent:
+        visit_intent = bool(getattr(intent, "visit_intent", False))
+
+        if visit_intent:
             lead_for_visit = _get_lead(session_id)
             visit_score = lead_for_visit.completeness_score()
             if visit_score >= 50:
@@ -399,8 +418,17 @@ async def process_message(
             else:
                 system_injections.append(f"SINAL_DE_VISITA_DETECTADO=True — O lead demonstrou intenção de visitar, mas maturidade ainda é baixa ({visit_score}%). Responda positivamente ('Claro, vamos agendar'), mas antes colete o dado faltante mais importante. Só agende no próximo turno.")
 
+        if _wants_whatsapp_continuation(input_text):
+            system_injections.append(
+                "PREFERENCIA_WHATSAPP_DETECTADA=True — O lead não quer agendar visita agora e prefere seguir pelo WhatsApp. "
+                "Não insista em visita. Conduza a continuidade remota e escalone com escalonar_lead."
+            )
+
         lead_ctx = _get_lead(session_id)
-        mentioned_queries = detect_vehicle_mentions(input_text, limit=3)
+        should_detect_vehicle_mentions = bool(
+            intent.vehicle_query or intent.is_asking_for_vehicle or intent.is_asking_for_photos
+        )
+        mentioned_queries = detect_vehicle_mentions(input_text, limit=3) if should_detect_vehicle_mentions else []
         if intent.vehicle_query:
             normalized_explicit_query = intent.vehicle_query.strip().lower()
             existing_queries = {query.lower() for query in mentioned_queries}
@@ -541,7 +569,7 @@ async def process_message(
         # D. Densidade e Maturidade (Prevenir fechamento prematuro)
         lead = _get_lead(session_id)
         score = lead.completeness_score()
-        if score < 50 and not intent.wants_human:
+        if score < 50 and not intent.wants_human and not visit_intent:
             missing = lead.get_missing_fields() if lead.get_missing_fields() else ['vários campos']
             missing_summary = ', '.join(missing)
             system_injections.append(
