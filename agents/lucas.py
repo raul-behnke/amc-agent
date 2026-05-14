@@ -109,7 +109,7 @@ def create_lucas_agent(
         user_id=user_id,
         # Memória conversacional
         add_history_to_context=True,
-        num_history_runs=10,
+        num_history_runs=8,
         # Experiência
         markdown=False,  # WhatsApp não renderiza markdown
         add_datetime_to_context=True,

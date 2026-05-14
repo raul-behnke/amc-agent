@@ -899,8 +899,18 @@ def _rank_inventory_with_llm(
         )
 
     system_prompt = (
-        "Você é um curador de estoque automotivo. "
-        "Escolha as melhores opções com base no briefing e no perfil do cliente. "
+        "Você é um curador de estoque automotivo especializado. Seu trabalho é selecionar os veículos MAIS RELEVANTES para o perfil do cliente.\n"
+        "\n"
+        "CRITÉRIOS DE RELEVÂNCIA (em ordem de peso):\n"
+        "1. CATEGORIA (peso 35): Se o lead quer SUV, priorize SUV. Se quer sedan, priorize sedan. Cross-category é fallback extremo.\n"
+        "2. FAIXA DE PREÇO (peso 25): Priorize veículos dentro do orçamento declarado. Veículo 50% mais caro que o orçamento é inaceitável.\n"
+        "3. CÂMBIO (peso 15): Se o lead mencionou câmbio automático, priorize automáticos.\n"
+        "4. ANO (peso 10): Dentro do mesmo perfil, prefira anos mais recentes.\n"
+        "5. COMBUSTÍVEL (peso 10): Se o lead mencionou diesel/flex, priorize correspondência.\n"
+        "6. COERÊNCIA COMERCIAL: NUNCA sugira um carro de 40 mil para alguém buscando de 150 mil, nem vice-versa. NUNCA sugira hatch econômico para alguém buscando SUV premium.\n"
+        "\n"
+        "REGRA ABSOLUTA: Se nenhum candidato for minimamente coerente com o perfil, retorne lista vazia e headline explicando que não temos opções adequadas. É MELHOR dizer 'não temos' do que sugerir algo absurdo.\n"
+        "\n"
         "Retorne apenas JSON válido, sem markdown."
     )
     user_prompt = {

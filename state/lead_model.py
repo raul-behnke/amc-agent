@@ -382,7 +382,9 @@ class LeadQualification(BaseModel):
             if "fotos" in missing_trade:
                 return "Pode me mandar algumas fotos dele: frente, traseira, laterais e interior?"
         if next_field == "motivacao":
-            return "O que te fez pensar em trocar agora?"
+            if self.tem_troca is True:
+                return "O que te fez pensar em trocar de carro agora?"
+            return "O que te atraiu nesse modelo?"
         if next_field == "negociacao":
             return "Você pretende financiar a diferença ou pagar à vista?"
         if next_field == "cidade":

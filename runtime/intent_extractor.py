@@ -22,11 +22,13 @@ class QualificationFacts(BaseModel):
     cidade: Optional[str] = Field(None, description="Cidade ou região do lead")
 
 class IntentExtraction(BaseModel):
-    is_asking_for_vehicle: bool = Field(..., description="True apenas se o lead está pedindo para ver opções de veículos, preços ou características do estoque.")
-    vehicle_query: Optional[str] = Field(None, description="O modelo específico mais importante no turno atual. Se o lead pedir fotos de um carro específico (ex: 'fotos do Gol', 'fotos do Golzinho'), extraia 'Gol' aqui obrigatoriamente.")
+    is_asking_for_vehicle: bool = Field(..., description="True se o lead está pedindo para ver opções de veículos, preços, características do estoque, OU descrevendo um perfil de carro que quer ('quero um automático até 2019', 'pensei em uma SUV até 95mil', 'tem algo diesel?'). False se está apenas respondendo perguntas ou confirmando.")
+    vehicle_query: Optional[str] = Field(None, description="O modelo específico OU perfil de busca do lead. Modelos: 'Gol', 'HB20 2015'. Perfil: 'SUV diesel automático até 150mil', 'hatch até 2019', 'sedan até 95 mil'. Sempre que o lead descrever o que procura com filtros, capture tudo aqui.")
     is_asking_for_photos: bool = Field(..., description="True APENAS se o lead pediu para RECEBER fotos do nosso estoque. False se o lead está enviando ou oferecendo fotos do carro dele.")
-    is_accepting_info: bool = Field(..., description="True se o lead está aceitando/confirmando receber informações (ex: 'pode sim', 'claro', 'manda', 'quero saber', 'show'). False se está fazendo uma pergunta nova ou dando informação.")
+    is_accepting_info: bool = Field(..., description="True se o lead está aceitando/confirmando receber informações (ex: 'pode sim', 'claro', 'manda', 'quero saber', 'show'). False se está fazendo uma pergunta nova ou dando informação nova que NÃO é confirmação.")
     wants_human: bool = Field(..., description="True se o lead exigir um humano, gerente, ou estiver muito irritado.")
+    visit_intent: bool = Field(False, description="True se o lead demonstra intenção de visitar a loja (perguntou horário de funcionamento, endereço, como chegar, disse que vai passar/visitar). Frases como 'até que horas atendem?', 'qual o endereço?', 'vou aí sábado' são visit_intent=True.")
+    search_filters: Optional[str] = Field(None, description="Filtros de busca extraídos da mensagem do lead quando ele descreve um perfil. Formato: 'tipo=X cambio=Y preco_max=Z ano_min=W'. Ex: 'SUV diesel automático até 150mil' → 'tipo=suv cambio=automático preco_max=150000'. Só preencha se o lead descrever filtros.")
     qualification_facts: QualificationFacts = Field(default_factory=QualificationFacts)
 
 EXTRACTOR_INSTRUCTIONS = """
@@ -54,6 +56,14 @@ Se o contexto mostrar que a última pergunta foi sobre a MOTIVAÇÃO da compra/t
 2. NÃO defina `is_asking_for_vehicle` como True. Isso NÃO é um pedido para listar estoque agora, é apenas a motivação.
 Só defina `is_asking_for_vehicle` como True se o lead pedir ativamente para ver carros (ex: "me mostra opções", "tem modelos assim?", "quais carros estilosos vocês têm?").
 
+BUSCAS POR PERFIL (QUERIES COMPOSTAS):
+Se o lead descrever o que procura com filtros, extraia TUDO:
+- "quero um automático até 2019" → is_asking_for_vehicle=True, vehicle_query="automático até 2019", search_filters="cambio=automático ano_max=2019"
+- "pensei em uma SUV até 95mil" → is_asking_for_vehicle=True, vehicle_query="SUV até 95 mil", search_filters="tipo=suv preco_max=95000"
+- "tem algo diesel?" → is_asking_for_vehicle=True, vehicle_query="diesel", search_filters="combustivel=diesel"
+- "quero um sedan flex automático até 80 mil" → is_asking_for_vehicle=True, vehicle_query="sedan flex automático até 80 mil", search_filters="tipo=sedan combustivel=flex cambio=automático preco_max=80000"
+NÃO extraia vehicle_query de menções genéricas como "meu primeiro carro", "preciso de um carro", "quero um carro novo" — essas NÃO são buscas de veículo.
+
 SELEÇÃO DE OPÇÕES:
 Se o agente apresentou várias opções (ex: HB20 2017 e HB20 2015) e o lead escolheu uma ou pediu fotos ("desse 2015", "do automático", "do mais barato"):
 1. Preencha o `vehicle_query` com a referência completa do modelo escolhido (ex: "HB20 2015", "HB20 Automático").
@@ -68,6 +78,12 @@ REGRAS PARA FOTOS:
 - Se o lead diz 'tem fotos?', 'manda fotos', 'quero ver as fotos desse': is_asking_for_photos=True.
 - Se o lead diz 'vou mandar as fotos', 'já te envio as fotos', 'já encaminho as imagens': is_asking_for_photos=False (ele está enviando, não pedindo).
 - Quando o contexto recente estiver falando do carro de troca do lead e ele disser 'vou mandar as fotos' ou similar, marque também `qualification_facts.fotos_troca_recebidas=True`.
+
+REGRAS PARA INTENÇÃO DE VISITA:
+- Se o lead perguntar sobre horário de funcionamento ('até que horas atendem?', 'vocês abrem sábado?', 'funciona domingo?'): visit_intent=True.
+- Se o lead perguntar sobre endereço ou localização ('qual o endereço?', 'onde fica a loja?', 'como chegar?'): visit_intent=True.
+- Se o lead disser que vai visitar ('vou passar aí', 'posso ir sábado?', 'amanhã vou pra Joinville', 'quero ver o carro', 'consigo ver hoje?'): visit_intent=True.
+- Se o lead estiver apenas conversando sobre o carro sem menção a visita: visit_intent=False.
 
 Sua extração será usada pelo Runtime do sistema apenas para carregar o contexto antes da resposta do Vendedor.
 """
