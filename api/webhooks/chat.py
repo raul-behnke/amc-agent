@@ -105,12 +105,17 @@ async def _run_agent_and_respond(
                 total=len(messages_to_send),
                 att=bool(msg["attachments"]),
             )
-            await send_message_async(
-                contact_id=contact_id,
-                conversation_id=conversation_id,
-                text=msg["text"],
-                attachments=msg["attachments"],
-            )
+            try:
+                await send_message_async(
+                    contact_id=contact_id,
+                    conversation_id=conversation_id,
+                    text=msg["text"],
+                    attachments=msg["attachments"],
+                )
+                logger.info("Bloco {i}/{total} enviado com sucesso ao GHL", i=i + 1, total=len(messages_to_send))
+            except Exception as send_err:
+                logger.error("ERRO ao enviar bloco {i}/{total} ao GHL: {err}", i=i + 1, total=len(messages_to_send), err=str(send_err))
+                raise
 
     except Exception:
         logger.exception("Falha no processamento em background")

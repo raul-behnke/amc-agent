@@ -40,6 +40,7 @@ async def _ghl_request_async(method: str, path: str, **kwargs: Any) -> dict:
             headers=_ghl_headers(version=version),
             **kwargs,
         )
+        logger.debug("GHL async response | status={code} | path={path}", code=response.status_code, path=path)
         response.raise_for_status()
         return response.json()
 

@@ -260,7 +260,12 @@ def _build_session_context(session_id: str) -> str:
         f"VEICULO_FOCO_ATUAL={lead.vehicle_journey.current_focus}",
         f"VEICULO_SOLICITADO_NESTE_TURNO={lead.vehicle_journey.current_request}",
         f"VEICULO_ALVO_FOTOS={lead.vehicle_journey.photo_target}",
-        f"SESSION_STATE_JSON={json.dumps(state_payload, ensure_ascii=False)}",
+        f"NOME_LEAD={lead.nome}",
+        f"CIDADE_LEAD={lead.cidade}",
+        f"INTENCAO_LEAD={lead._intencao_texto()}",
+        f"MOTIVACAO_LEAD={lead.motivacao}",
+        f"NEGOCIACAO_LEAD={lead.negociacao}",
+        f"TEM_TROCA={lead.tem_troca}",
     ]
     
     # Lacunas factuais — apenas informa o que ainda não sabemos, sem sugerir ação
@@ -274,6 +279,16 @@ def _build_session_context(session_id: str) -> str:
         context_lines.append(f"LEAD_ANSWERS={json.dumps(lead.lead_answers, ensure_ascii=False)}")
     if lead.conversation_summary:
         context_lines.append(f"CONVERSATION_SUMMARY={lead.conversation_summary}")
+
+    presented_titles = [v.titulo for v in lead.vehicle_journey.presented_vehicles if v.titulo]
+    if presented_titles:
+        context_lines.append(f"VEICULOS_JA_CONFIRMADOS_DISPONIVEIS={json.dumps(presented_titles, ensure_ascii=False)}")
+        context_lines.append(f"VEICULOS_JA_SUGERIDOS={json.dumps(presented_titles, ensure_ascii=False)}")
+
+    score = lead.completeness_score()
+    temperature = "hot" if score >= 70 else "warm" if score >= 40 else "cold"
+    context_lines.append(f"LEAD_TEMPERATURE={temperature}")
+    context_lines.append(f"MATURIDADE_SCORE={score}%")
 
     return "\n".join(context_lines)
 
@@ -376,6 +391,14 @@ async def process_message(
             registrar_qualificacao(session_id=session_id, **facts)
             system_injections.append(f"O SISTEMA IDENTIFICOU E SALVOU FATOS NOVOS: {json.dumps(facts, ensure_ascii=False)}")
 
+        if intent.visit_intent:
+            lead_for_visit = _get_lead(session_id)
+            visit_score = lead_for_visit.completeness_score()
+            if visit_score >= 50:
+                system_injections.append("SINAL_DE_VISITA_DETECTADO=True — O lead demonstrou intenção de visitar a loja e maturidade é suficiente. Proponha agendamento IMEDIATAMENTE com endereço e horário sugerido.")
+            else:
+                system_injections.append(f"SINAL_DE_VISITA_DETECTADO=True — O lead demonstrou intenção de visitar, mas maturidade ainda é baixa ({visit_score}%). Responda positivamente ('Claro, vamos agendar'), mas antes colete o dado faltante mais importante. Só agende no próximo turno.")
+
         lead_ctx = _get_lead(session_id)
         mentioned_queries = detect_vehicle_mentions(input_text, limit=3)
         if intent.vehicle_query:
@@ -411,6 +434,16 @@ async def process_message(
 
             seen_queries: set[str] = set()
             primary_turn_query = search_queries[0] if search_queries else None
+
+            perfil_parts = []
+            if lead_ctx.faixa_preco:
+                perfil_parts.append(f"orçamento: {lead_ctx.faixa_preco}")
+            if lead_ctx.cambio:
+                perfil_parts.append(f"câmbio: {lead_ctx.cambio}")
+            if lead_ctx.tipo_veiculo:
+                perfil_parts.append(f"tipo: {lead_ctx.tipo_veiculo}")
+            perfil_cliente = " | ".join(perfil_parts) if perfil_parts else None
+
             for search_query in search_queries:
                 normalized_query = search_query.lower().strip()
                 if not normalized_query or normalized_query in seen_queries:
@@ -426,6 +459,7 @@ async def process_message(
                     prompt_busca=search_query,
                     modo="discovery",
                     limite=3,
+                    perfil_cliente=perfil_cliente,
                 )
                 filtered_payload = _filter_stock_payload(estoque_raw, search_query)
                 system_injections.append(_build_stock_injection(filtered_payload, search_query, estoque_raw))
