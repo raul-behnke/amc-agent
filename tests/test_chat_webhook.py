@@ -166,7 +166,7 @@ class ChatWebhookPhotoTests(unittest.TestCase):
             new=AsyncMock(return_value=True),
         ):
             response = client.post(
-                "/webhook/chat",
+                "/webhook/message",
                 json={
                     "contactId": "5511999999999",
                     "body": "Tenho interesse no Honda Fit",

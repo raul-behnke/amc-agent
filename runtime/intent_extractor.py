@@ -16,7 +16,7 @@ class QualificationFacts(BaseModel):
     km_troca: Optional[str] = Field(None, description="Quilometragem do carro de troca quando o lead informar (ex: '145 mil km').")
     quitado_troca: Optional[bool] = Field(None, description="True se o lead disser que o carro de troca está quitado; False se disser que ainda não está.")
     estado_troca: Optional[str] = Field(None, description="Estado geral ou avarias do carro de troca quando o lead descrever.")
-    fotos_troca_recebidas: Optional[bool] = Field(None, description="True apenas se o lead disser que está enviando ou já enviou fotos do carro de troca.")
+    fotos_troca_recebidas: Optional[bool] = Field(None, description="True se o lead disser que VAI mandar, está mandando, ou já mandou fotos do carro de troca dele. Inclui promessas futuras: 'te mando depois', 'mando quando chegar em casa', 'já te envio', 'vou mandar amanhã', 'envio quando sair do trabalho'. Qualquer compromisso de envio (presente ou futuro) = True.")
     motivacao: Optional[str] = Field(None, description="Motivação da compra/troca (ex: 'preciso de mais espaço', 'carro antigo dando problema')")
     negociacao: Optional[str] = Field(None, description="Forma de pagamento desejada (ex: financiamento, à vista)")
     cidade: Optional[str] = Field(None, description="Cidade ou região do lead")
@@ -48,7 +48,7 @@ REGRAS DE INFERÊNCIA PERMITIDAS:
 - Se o lead informar quilometragem do carro dele, preencha `km_troca`.
 - Se o lead disser que o carro está quitado ou não está quitado, preencha `quitado_troca`.
 - Se o lead descrever estado, avaria, detalhes de conservação do carro dele, preencha `estado_troca`.
-- Se o lead disser que vai mandar, está mandando, ou já mandou fotos do carro dele, preencha `fotos_troca_recebidas=True`.
+- Se o lead disser que vai mandar, vai enviar depois, está mandando, ou já mandou fotos do carro dele, preencha `fotos_troca_recebidas=True`. Promessas futuras ('te mando quando chegar em casa', 'mando depois', 'já te envio', 'envio amanhã') CONTAM como True.
 
 REGRAS PARA BUSCA DE VEÍCULOS E MOTIVAÇÃO:
 Se o contexto mostrar que a última pergunta foi sobre a MOTIVAÇÃO da compra/troca (ex: "Qual o motivo da troca?"), e o lead responder coisas como "quero algo mais estiloso", "quero um carro maior", "busco conforto", "para trabalho":

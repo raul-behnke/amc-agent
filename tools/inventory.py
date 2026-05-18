@@ -12,15 +12,66 @@ from loguru import logger
 from openai import OpenAI
 
 from services.ghl import fetch_inventory_sync
+from tools.taxonomy import get_vehicle_category
 
 
 CATEGORY_KEYWORDS = {
-    "hatch": {"hb20", "gol", "palio", "ka", "sandero", "onix", "c3", "fiat 500", "500"},
-    "sedan": {"fluence", "sentra", "cruze", "versa", "logan", "civic", "corolla", "clio sedan"},
-    "suv": {"renegade", "ecosport", "tracker", "cactus", "creta", "edge", "duster", "captur"},
-    "picape": {"s10", "strada", "saveiro", "ranger", "hilux", "amarok", "montana"},
-    "pickup": {"s10", "strada", "saveiro", "ranger", "hilux", "amarok", "montana"},
-    "compacto": {"hb20", "gol", "palio", "ka", "fiat 500", "500", "c3"},
+    "hatch": {
+        "hb20", "gol", "palio", "ka", "sandero", "onix hatch", "onix", "c3", "fiat 500", "500",
+        "uno", "mobi", "fox", "crossfox", "up!", "up", "208", "207", "fit", "golf", "polo",
+        "argo", "celta", "march", "punto", "i30", "stilo", "bravo", "yaris hatch", "fiesta",
+        "ka+", "agile", "ipanema", "kwid", "picanto", "city hatch", "clio",
+    },
+    "sedan": {
+        "fluence", "sentra", "cruze", "versa", "logan", "civic", "corolla", "clio sedan",
+        "voyage", "siena", "grand siena", "prisma", "onix plus", "onix sedan", "hb20s", "hb20 sedan",
+        "virtus", "jetta", "vento", "city", "yaris sedan", "elantra", "accord", "fusion",
+        "linea", "polo sedan", "cobalt", "ka sedan", "ka+ sedan", "passat", "mazda3", "altima",
+    },
+    "suv": {
+        "renegade", "ecosport", "tracker", "cactus", "c4 cactus", "creta", "edge", "duster", "captur",
+        "compass", "commander", "kicks", "hrv", "hr-v", "wr-v", "wrv", "corolla cross", "rav4",
+        "tiggo", "tiggo 3", "tiggo 5", "tiggo 7", "tiggo 8", "tucson", "santa fe", "outlander",
+        "asx", "sorento", "sportage", "pajero", "pajero sport", "pajero tr4", "xtrail", "x-trail",
+        "kuga", "trailblazer", "territory", "bronco", "bronco sport", "fastback", "pulse",
+        "cr-v", "crv", "nivus", "t-cross", "tcross", "taos", "tiguan", "land cruiser", "discovery",
+        "evoque", "freelander", "outback", "forester", "xv", "cherokee", "grand cherokee",
+        "wrangler", "trailhawk", "cx-5", "cx5", "cx-3", "cx3",
+    },
+    "picape": {
+        "s10", "strada", "saveiro", "ranger", "hilux", "amarok", "montana", "toro", "frontier",
+        "l200", "triton", "dakota", "courier", "oroch", "duster oroch", "maverick", "gladiator",
+        "ram", "f-250", "f250", "f-1000", "f1000", "d20", "d-20", "rampage", "tornado",
+    },
+    "pickup": {
+        "s10", "strada", "saveiro", "ranger", "hilux", "amarok", "montana", "toro", "frontier",
+        "l200", "triton", "dakota", "courier", "oroch", "maverick", "gladiator", "ram", "f-250",
+        "f250", "d20", "rampage",
+    },
+    "compacto": {
+        "hb20", "gol", "palio", "ka", "fiat 500", "500", "c3", "uno", "mobi", "up", "up!",
+        "kwid", "picanto", "celta", "march", "fox", "208",
+    },
+    "minivan": {
+        "spin", "livina", "grand livina", "doblo", "idea", "meriva", "zafira", "picasso",
+        "xsara picasso", "c3 picasso", "scenic", "kangoo", "partner", "berlingo", "caddy",
+        "touran", "sharan", "carnival", "sienna", "odyssey",
+    },
+    "perua": {
+        "parati", "quantum", "santana", "marea weekend", "palio weekend", "polo variant",
+        "fielder", "logan sw", "spacefox",
+    },
+    "esportivo": {
+        "tt", "supra", "rs3", "rs5", "rs6", "m3", "m4", "m5", "amg", "911", "boxster", "cayman",
+        "camaro", "mustang", "challenger", "corvette", "f-type", "gtr", "gt-r", "nsx", "r8",
+    },
+}
+
+CATEGORY_TITLE_REGEX = {
+    "picape": [r"\bp[\.\-]?up\b", r"\bcabine dupla\b", r"\bcd\b", r"\bcs\b", r"\b4x4\b.*\bdiesel\b"],
+    "suv": [r"\b4x4\b", r"\bawd\b", r"\b4wd\b"],
+    "sedan": [r"\bsedan\b", r"\bsd\b\s*\d"],
+    "hatch": [r"\bhatch\b", r"\bhb\b"],
 }
 
 GENERIC_INVENTORY_REQUEST_TOKENS = {
@@ -43,6 +94,19 @@ GENERIC_INVENTORY_REQUEST_TOKENS = {
 PREFERENCE_MODES = {"newer", "cheaper", "automatic", "manual"}
 LLM_MODE_VALUES = {"single", "alternatives", "confirm", "vehicle_info"}
 FILTERABLE_VEHICLE_TYPES = {"hatch", "sedan", "suv", "picape", "pickup", "compacto"}
+
+
+def _vehicle_year(vehicle: dict[str, Any]) -> int:
+    for key in ("ano", "ano_modelo", "ano_fabricacao"):
+        value = vehicle.get(key)
+        if value:
+            try:
+                year = int(value)
+                if year > 1900:
+                    return year
+            except (TypeError, ValueError):
+                continue
+    return 0
 
 
 def _format_price(price: int) -> str:
@@ -120,9 +184,9 @@ def _match_vehicle_alias_in_text(vehicle: dict[str, Any], text: str) -> bool:
         alias_compact = _compact_text(alias)
         if not alias_compact:
             continue
-        if alias_norm and alias_norm in normalized_text:
+        if alias_norm and len(alias_compact) >= 3 and alias_norm in normalized_text:
             return True
-        if alias_compact and alias_compact in compact_text:
+        if alias_compact and len(alias_compact) >= 4 and alias_compact in compact_text:
             return True
         if any(_token_matches_alias(token, alias) for token in tokens):
             return True
@@ -153,7 +217,7 @@ def _resolve_vehicle_from_candidates(request_text: str, candidate_vehicles: list
     year_match = re.search(r"\b(19|20)\d{2}\b", request_text)
     if year_match:
         year = int(year_match.group(0))
-        year_matches = [vehicle for vehicle in vehicles if int(vehicle.get("ano", 0) or 0) == year]
+        year_matches = [vehicle for vehicle in vehicles if _vehicle_year(vehicle) == year]
         if len(year_matches) == 1:
             return year_matches[0]
 
@@ -175,7 +239,7 @@ def _resolve_vehicle_from_candidates(request_text: str, candidate_vehicles: list
     if "mais barato" in request_norm:
         return min(vehicles, key=lambda vehicle: int(vehicle.get("preco", 0) or 0))
     if "mais novo" in request_norm:
-        return max(vehicles, key=lambda vehicle: int(vehicle.get("ano", 0) or 0))
+        return max(vehicles, key=lambda vehicle: _vehicle_year(vehicle))
 
     alias_matches = [vehicle for vehicle in vehicles if _match_vehicle_alias_in_text(vehicle, request_text)]
     if len(alias_matches) == 1:
@@ -245,18 +309,23 @@ def _match_vehicle_flexible(vehicle: dict[str, Any], search_term: str) -> bool:
     if not search_term:
         return True
 
-    def normalize(t: str) -> str:
-        return re.sub(r"[^a-z0-9]", "", t.lower())
+    term = _compact_text(search_term)
+    raw_search = _normalize_text(search_term)
+    v_marca = _compact_text(str(vehicle.get("marca", "")))
+    v_modelo = _compact_text(str(vehicle.get("modelo", "")))
+    v_titulo = _compact_text(str(vehicle.get("titulo", "")))
+    v_marca_norm = _normalize_text(str(vehicle.get("marca", "")))
+    v_modelo_norm = _normalize_text(str(vehicle.get("modelo", "")))
+    v_titulo_norm = _normalize_text(str(vehicle.get("titulo", "")))
 
-    term = normalize(search_term)
-    v_marca = normalize(str(vehicle.get("marca", "")))
-    v_modelo = normalize(str(vehicle.get("modelo", "")))
-    v_titulo = normalize(str(vehicle.get("titulo", "")))
-
-    if term in v_titulo or term in v_modelo or term in v_marca:
+    if term and term in {v_titulo, v_modelo, v_marca}:
+        return True
+    if raw_search and raw_search in {v_titulo_norm, v_modelo_norm, v_marca_norm}:
+        return True
+    if len(term) >= 4 and term in v_titulo:
         return True
 
-    words = set(re.findall(r"\w+", term))
+    words = set(re.findall(r"[a-z0-9]+", raw_search))
     ignore = {"flex", "12v", "16v", "plus", "comf", "comfort", "style", "1", "0", "6", "8", "2"}
     important_words = words - ignore
     if not important_words:
@@ -265,9 +334,9 @@ def _match_vehicle_flexible(vehicle: dict[str, Any], search_term: str) -> bool:
     for word in important_words:
         if len(word) < 2:
             continue
-        v_ano = str(vehicle.get("ano", ""))
-        if (re.search(rf"\b{re.escape(word)}\b", v_titulo) or 
-            re.search(rf"\b{re.escape(word)}\b", v_modelo) or
+        v_ano = str(_vehicle_year(vehicle) or "")
+        if (re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", v_titulo_norm) or
+            re.search(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", v_modelo_norm) or
             word == v_ano):
             return True
     return False
@@ -285,34 +354,76 @@ def _normalize_price_text(text: str) -> str:
     )
 
 
-def _parse_price_filters(faixa_preco: str | None) -> tuple[int | None, int | None]:
+PRICE_TOLERANCE = 5000
+
+
+def _parse_price_filters(faixa_preco: str | None, tolerance: int = PRICE_TOLERANCE) -> tuple[int | None, int | None]:
     if not faixa_preco:
         return None, None
 
     raw = _normalize_price_text(faixa_preco)
+    has_mil = "mil" in (faixa_preco or "").lower()
     numbers = [int(n) for n in re.findall(r"\d{2,6}", raw)]
     if not numbers:
         return None, None
+    if has_mil:
+        numbers = [n * 1000 if n < 1000 else n for n in numbers]
 
     if any(token in raw for token in ("até", "ate", "abaixo", "menos de", "no máximo", "maximo")):
-        return None, numbers[0]
+        return None, numbers[0] + tolerance
     if any(token in raw for token in ("acima", "a partir", "mais de")):
-        return numbers[0], None
+        return max(0, numbers[0] - tolerance), None
     if len(numbers) >= 2:
         low, high = sorted(numbers[:2])
-        return low, high
-    return None, numbers[0]
+        return max(0, low - tolerance), high + tolerance
+    only = numbers[0]
+    return max(0, only - tolerance), only + tolerance
 
 
 def _parse_year_filter(ano_minimo: int | None) -> int | None:
     return ano_minimo if ano_minimo and ano_minimo > 1900 else None
 
 
+def _parse_km_filter(km_maximo: int | None) -> int | None:
+    if km_maximo is None:
+        return None
+    try:
+        value = int(km_maximo)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+CATEGORY_ALIASES = {
+    "pickup": "picape",
+    "cupê": "cupe",
+    "conversível": "conversivel",
+}
+
+
 def _vehicle_matches_category(vehicle: dict[str, Any], tipo_veiculo: str) -> bool:
     tipo = tipo_veiculo.lower().strip()
-    title = f"{vehicle.get('marca', '')} {vehicle.get('modelo', '')} {vehicle.get('titulo', '')}".lower()
+    tipo = CATEGORY_ALIASES.get(tipo, tipo)
+
+    canonical = get_vehicle_category(vehicle)
+    if canonical:
+        canonical = CATEGORY_ALIASES.get(canonical, canonical)
+        if canonical == tipo:
+            return True
+        if tipo == "picape" and canonical == "picape":
+            return True
+        return False
+
+    title = _normalize_text(
+        f"{vehicle.get('marca', '')} {vehicle.get('modelo', '')} {vehicle.get('titulo', '')} {vehicle.get('versao', '')}"
+    )
     keywords = CATEGORY_KEYWORDS.get(tipo, {tipo})
-    return any(keyword in title for keyword in keywords)
+    if any(_normalize_text(keyword) in title for keyword in keywords):
+        return True
+    for pattern in CATEGORY_TITLE_REGEX.get(tipo, []):
+        if re.search(pattern, title):
+            return True
+    return False
 
 
 def _normalize_vehicle_text(value: str) -> str:
@@ -345,21 +456,33 @@ def _filter_inventory(
     faixa_preco: str | None,
     tipo_veiculo: str | None,
     ano_minimo: int | None = None,
+    ano_maximo: int | None = None,
+    km_maximo: int | None = None,
     cambio: str | None = None,
     reference_vehicle: dict[str, Any] | None = None,
+    marca: str | None = None,
 ) -> list[dict[str, Any]]:
     min_price, max_price = _parse_price_filters(faixa_preco)
     min_year = _parse_year_filter(ano_minimo)
+    max_year = _parse_year_filter(ano_maximo)
+    max_km = _parse_km_filter(km_maximo)
     filtered = inventory
 
     if tipo_veiculo:
         filtered = [v for v in filtered if _vehicle_matches_category(v, tipo_veiculo)]
+    if marca:
+        marca_norm = _normalize_text(marca)
+        filtered = [v for v in filtered if marca_norm and marca_norm in _normalize_text(str(v.get("marca", "")))]
     if reference_vehicle:
         family_filtered = [v for v in filtered if _same_vehicle_family(v, reference_vehicle)]
         if family_filtered:
             filtered = family_filtered
     if min_year is not None:
-        filtered = [v for v in filtered if int(v.get("ano", 0) or 0) >= min_year]
+        filtered = [v for v in filtered if _vehicle_year(v) >= min_year]
+    if max_year is not None:
+        filtered = [v for v in filtered if _vehicle_year(v) <= max_year]
+    if max_km is not None:
+        filtered = [v for v in filtered if int(v.get("quilometragem", 0) or 0) <= max_km]
     if min_price is not None:
         filtered = [v for v in filtered if int(v.get("preco", 0) or 0) >= min_price]
     if max_price is not None:
@@ -394,7 +517,7 @@ def _serialize_vehicle(vehicle: dict[str, Any]) -> dict[str, Any]:
         "titulo": vehicle.get("titulo", "Veículo"),
         "marca": vehicle.get("marca"),
         "modelo": vehicle.get("modelo"),
-        "ano": vehicle.get("ano"),
+        "ano": _vehicle_year(vehicle) or None,
         "preco": price,
         "preco_formatado": _format_price(price) if price > 0 else "Sob consulta",
         "quilometragem": km,
@@ -492,7 +615,7 @@ def _sort_inventory_results(
         return sorted(
             vehicles,
             key=lambda x: (
-                int(x.get("ano", 0) or 0),
+                _vehicle_year(x),
                 -(int(x.get("preco", 0) or 0)),
                 -int(x.get("quilometragem", 0) or 0),
             ),
@@ -503,7 +626,7 @@ def _sort_inventory_results(
             vehicles,
             key=lambda x: (
                 int(x.get("preco", 0) or 0),
-                -(int(x.get("ano", 0) or 0)),
+                -_vehicle_year(x),
             ),
             reverse=False,
         )
@@ -514,7 +637,7 @@ def _sort_inventory_results(
             vehicles,
             key=lambda x: (
                 preferred_keyword in str(x.get("cambio", "")).lower(),
-                int(x.get("ano", 0) or 0),
+                _vehicle_year(x),
                 -(int(x.get("preco", 0) or 0)),
             ),
             reverse=True,
@@ -603,6 +726,24 @@ def _coerce_year(value: Any) -> int | None:
     return year if year > 1900 else None
 
 
+def _coerce_km(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        digits = re.sub(r"[^\d]", "", value)
+        if not digits:
+            return None
+        km = int(digits)
+        if "mil" in value.lower() and km < 1000:
+            km *= 1000
+    else:
+        try:
+            km = int(value)
+        except (TypeError, ValueError):
+            return None
+    return km if km > 0 else None
+
+
 def _build_filter_planner_prompt(
     prompt_busca: str | None = None,
     prompt_contexto: str | None = None,
@@ -614,6 +755,8 @@ def _build_filter_planner_prompt(
     faixa_preco: str | None = None,
     tipo_veiculo: str | None = None,
     ano_minimo: int | None = None,
+    ano_maximo: int | None = None,
+    km_maximo: int | None = None,
     cambio: str | None = None,
     prefer: str | None = None,
     modo: str | None = None,
@@ -631,6 +774,8 @@ def _build_filter_planner_prompt(
             f"FAIXA_PRECO={faixa_preco or ''}",
             f"TIPO_VEICULO={tipo_veiculo or ''}",
             f"ANO_MINIMO={ano_minimo or ''}",
+            f"ANO_MAXIMO={ano_maximo or ''}",
+            f"KM_MAXIMO={km_maximo or ''}",
             f"CAMBIO={cambio or ''}",
             f"PREFER={prefer or ''}",
             f"MODO={modo or ''}",
@@ -649,6 +794,8 @@ def _plan_inventory_filters_with_llm(
     faixa_preco: str | None = None,
     tipo_veiculo: str | None = None,
     ano_minimo: int | None = None,
+    ano_maximo: int | None = None,
+    km_maximo: int | None = None,
     cambio: str | None = None,
     prefer: str | None = None,
     modo: str | None = None,
@@ -671,8 +818,10 @@ def _plan_inventory_filters_with_llm(
         "marca": "string ou null",
         "reference_vehicle": "string ou null",
         "faixa_preco": "string ou null",
-        "tipo_veiculo": "hatch|sedan|suv|picape|pickup|compacto|null",
+        "tipo_veiculo": "hatch|sedan|suv|picape|pickup|compacto|minivan|perua|esportivo|null",
         "ano_minimo": "integer ou null",
+        "ano_maximo": "integer ou null",
+        "km_maximo": "integer ou null (km absoluto, ex 80000)",
         "cambio": "Automático|Mecânico|null",
         "prefer": "newer|cheaper|automatic|manual|null",
         "modo": "single|alternatives|confirm|vehicle_info|null",
@@ -690,16 +839,20 @@ def _plan_inventory_filters_with_llm(
             faixa_preco=faixa_preco,
             tipo_veiculo=tipo_veiculo,
             ano_minimo=ano_minimo,
+            ano_maximo=ano_maximo,
+            km_maximo=km_maximo,
             cambio=cambio,
             prefer=prefer,
             modo=modo,
         ),
         "regras": [
             "Se houver um veículo específico citado, priorize modelo e/ou search_term específicos.",
-            "Se o contexto indicar comparação dentro da mesma família, use reference_vehicle.",
+            "Use reference_vehicle SOMENTE quando o lead pedir alternativas/similares ao veículo (modo=alternatives) ou refinar um veículo específico (single/confirm). NÃO use reference_vehicle quando o lead estiver buscando categoria ampla (ex: 'tem outros sedans?', 'quais SUVs?') mesmo que haja um modelo previamente em foco — nesse caso deixe reference_vehicle nulo e use só tipo_veiculo.",
             "Se o lead não pediu filtro de preço, ano ou câmbio, deixe nulo.",
             "Não transforme marca em modelo. Não misture modelo parecido como se fosse o mesmo.",
             "Se o pedido for amplo, use search_term e tipo_veiculo quando fizer sentido.",
+            "Para faixa_preco: 'até X mil' = 'até X mil'; 'acima de X mil' ou 'a partir de X mil' = 'acima de X mil'; 'entre X e Y mil' = 'X-Y mil'. SEMPRE preencha faixa_preco quando houver menção a valor.",
+            "DETECTE COMPARATIVOS: se o lead disser 'mais novo'/'mais recente' → prefer='newer' E modo='alternatives' (NUNCA single). 'mais barato'/'mais em conta' → prefer='cheaper' + modo='alternatives'. 'automático' → prefer='automatic'. 'manual'/'mecânico' → prefer='manual'. Comparativos SEMPRE sinalizam que o lead quer ver opção DIFERENTE da já apresentada — NÃO use modo=single nesses casos.",
         ],
         "schema": schema,
     }
@@ -723,6 +876,8 @@ def _plan_inventory_filters_with_llm(
                 "faixa_preco": str(data.get("faixa_preco")).strip() if data.get("faixa_preco") else None,
                 "tipo_veiculo": str(data.get("tipo_veiculo")).strip().lower() if data.get("tipo_veiculo") else None,
                 "ano_minimo": _coerce_year(data.get("ano_minimo")),
+                "ano_maximo": _coerce_year(data.get("ano_maximo")),
+                "km_maximo": _coerce_km(data.get("km_maximo")),
                 "cambio": _normalize_cambio_value(data.get("cambio")),
                 "prefer": _normalize_prefer(data.get("prefer")),
                 "modo": _normalize_mode(data.get("modo")),
@@ -748,6 +903,8 @@ def _build_search_brief(
     faixa_preco: str | None = None,
     tipo_veiculo: str | None = None,
     ano_minimo: int | None = None,
+    ano_maximo: int | None = None,
+    km_maximo: int | None = None,
     cambio: str | None = None,
     prefer: str | None = None,
     modo: str | None = None,
@@ -764,6 +921,8 @@ def _build_search_brief(
         f"FAIXA_PRECO={faixa_preco or ''}",
         f"TIPO_VEICULO={tipo_veiculo or ''}",
         f"ANO_MINIMO={ano_minimo or ''}",
+        f"ANO_MAXIMO={ano_maximo or ''}",
+        f"KM_MAXIMO={km_maximo or ''}",
         f"CAMBIO={cambio or ''}",
         f"PREFER={prefer or ''}",
     ]
@@ -911,6 +1070,13 @@ def _rank_inventory_with_llm(
         "\n"
         "REGRA ABSOLUTA: Se nenhum candidato for minimamente coerente com o perfil, retorne lista vazia e headline explicando que não temos opções adequadas. É MELHOR dizer 'não temos' do que sugerir algo absurdo.\n"
         "\n"
+        "REGRA DE FOCO: O campo VEHICLE_FOCUS no briefing é contexto histórico (modelo que o lead já viu/foi tagged), NÃO é um filtro. Se o lead está pedindo CATEGORIA AMPLA ('outros sedans', 'que SUVs têm', 'me mostra hatches'), ignore VEHICLE_FOCUS e selecione variedade dentro da categoria. Só use VEHICLE_FOCUS como peso forte quando o briefing claramente pedir refinamento daquele veículo específico.\n"
+        "\n"
+        "REGRAS DE HEADLINE:\n"
+        "- NUNCA diga 'não temos o modelo específico' ou 'não encontramos o modelo X' se o briefing NÃO mencionar um modelo específico (ex: 'Honda Civic 2020'). Pedidos genéricos por categoria (SUV, sedan, hatch) ou semânticos ('pra família', 'pra Uber') NÃO são pedidos por modelo.\n"
+        "- Se o lead pediu categoria genérica e há matches da categoria certa, headline deve ser afirmativo: 'Separei essas opções de SUV que temos no estoque' ou similar. NÃO use 'mas' ou 'porém' como se estivesse decepcionando o cliente.\n"
+        "- Só use frase tipo 'não temos o modelo X, mas...' quando o briefing claramente cita um MODELO (marca+modelo) que de fato não está no estoque.\n"
+        "\n"
         "Retorne apenas JSON válido, sem markdown."
     )
     user_prompt = {
@@ -979,7 +1145,7 @@ def resolve_vehicle_for_photo_request(vehicle_query: str, request_text: str = ""
     year_match = re.search(r"\b(19|20)\d{2}\b", f"{vehicle_query} {request_text}")
     if year_match:
         requested_year = year_match.group(0)
-        year_filtered = [v for v in matches if str(v.get("ano", "")) == requested_year]
+        year_filtered = [v for v in matches if str(_vehicle_year(v) or "") == requested_year]
         if year_filtered:
             matches = year_filtered
 
@@ -1046,6 +1212,8 @@ def consultar_estoque(
     faixa_preco: str | None = None,
     tipo_veiculo: str | None = None,
     ano_minimo: int | None = None,
+    ano_maximo: int | None = None,
+    km_maximo: int | None = None,
     cambio: str | None = None,
     reference_vehicle: str | None = None,
     prefer: str | None = None,
@@ -1077,6 +1245,8 @@ def consultar_estoque(
         faixa_preco=faixa_preco,
         tipo_veiculo=tipo_veiculo,
         ano_minimo=ano_minimo,
+        ano_maximo=ano_maximo,
+        km_maximo=km_maximo,
         cambio=cambio,
         prefer=normalized_prefer,
         modo=normalized_mode,
@@ -1088,6 +1258,8 @@ def consultar_estoque(
     effective_faixa_preco = planned_filters.get("faixa_preco") or faixa_preco
     effective_tipo_veiculo = planned_filters.get("tipo_veiculo") or tipo_veiculo
     effective_ano_minimo = planned_filters.get("ano_minimo") or ano_minimo
+    effective_ano_maximo = planned_filters.get("ano_maximo") or ano_maximo
+    effective_km_maximo = planned_filters.get("km_maximo") or km_maximo
     effective_cambio = planned_filters.get("cambio") or cambio
     effective_prefer = planned_filters.get("prefer") or normalized_prefer
     effective_mode = planned_filters.get("modo") or normalized_mode
@@ -1098,17 +1270,35 @@ def consultar_estoque(
     elif effective_prefer == "manual" and not effective_cambio:
         effective_cambio = "Mecânico"
 
+    comparative_text = " ".join(filter(None, [prompt_busca, prompt_contexto])).lower()
+    if comparative_text:
+        if not effective_prefer:
+            if any(tok in comparative_text for tok in ("mais novo", "mais recente", "mais atual", "ano maior")):
+                effective_prefer = "newer"
+            elif any(tok in comparative_text for tok in ("mais barato", "mais em conta", "menor preço", "menor preco", "mais economic")):
+                effective_prefer = "cheaper"
+        if effective_mode == "single" and any(tok in comparative_text for tok in (
+            "mais novo", "mais recente", "mais barato", "outro", "outra opcao", "outra opção", "diferente", "tem outro", "tem mais"
+        )):
+            effective_mode = "alternatives"
+
+    broadening_search = bool(effective_tipo_veiculo) and not effective_reference_vehicle and effective_mode not in {"alternatives", "single", "confirm", "vehicle_info"}
+    if broadening_search and not effective_mode:
+        effective_mode = "alternatives"
+    effective_vehicle_focus_for_brief = None if broadening_search else vehicle_focus
     search_brief = _build_search_brief(
         prompt_busca=prompt_busca,
         prompt_contexto=prompt_contexto,
         perfil_cliente=perfil_cliente,
-        vehicle_focus=vehicle_focus,
+        vehicle_focus=effective_vehicle_focus_for_brief,
         reference_vehicle=effective_reference_vehicle,
         modelo=effective_modelo,
         marca=effective_marca,
         faixa_preco=effective_faixa_preco,
         tipo_veiculo=effective_tipo_veiculo,
         ano_minimo=effective_ano_minimo,
+        ano_maximo=effective_ano_maximo,
+        km_maximo=effective_km_maximo,
         cambio=effective_cambio,
         prefer=effective_prefer,
         modo=effective_mode,
@@ -1152,6 +1342,8 @@ def consultar_estoque(
             effective_faixa_preco,
             effective_tipo_veiculo,
             effective_ano_minimo is not None,
+            effective_ano_maximo is not None,
+            effective_km_maximo is not None,
             effective_cambio,
             effective_reference_vehicle,
             effective_prefer,
@@ -1167,8 +1359,17 @@ def consultar_estoque(
         return json.dumps({"ok": False, "error": "estoque_indisponivel"}, ensure_ascii=False)
 
     resolved_reference = _resolve_reference_vehicle(inventory, effective_reference_vehicle)
+    focus_reference_hint = None
+    refinement_modes = {"alternatives", "single", "confirm", "vehicle_info"}
+    if resolved_reference and effective_tipo_veiculo and effective_mode not in refinement_modes:
+        focus_reference_hint = resolved_reference
+        resolved_reference = None
     if not resolved_reference and vehicle_focus:
-        resolved_reference = _resolve_reference_vehicle(inventory, vehicle_focus)
+        candidate_focus = _resolve_reference_vehicle(inventory, vehicle_focus)
+        if candidate_focus and effective_mode in refinement_modes and not effective_tipo_veiculo:
+            resolved_reference = candidate_focus
+        elif candidate_focus and not focus_reference_hint:
+            focus_reference_hint = candidate_focus
     ignored_vehicle_keys = _normalize_ignored_vehicle_keys(
         veiculos_ignorados=veiculos_ignorados,
         reference_vehicle=resolved_reference,
@@ -1190,8 +1391,11 @@ def consultar_estoque(
         faixa_preco=effective_faixa_preco,
         tipo_veiculo=effective_tipo_veiculo,
         ano_minimo=effective_ano_minimo,
+        ano_maximo=effective_ano_maximo,
+        km_maximo=effective_km_maximo,
         cambio=effective_cambio,
         reference_vehicle=resolved_reference,
+        marca=effective_marca,
     )
     hard_matches = _sort_inventory_results(
         hard_matches,
@@ -1210,9 +1414,59 @@ def consultar_estoque(
     )
     retrieval_pool = _exclude_ignored_vehicles(_dedupe_vehicles(retrieval_pool), ignored_vehicle_keys)
 
+    if effective_tipo_veiculo:
+        category_filtered = [v for v in retrieval_pool if _vehicle_matches_category(v, effective_tipo_veiculo)]
+        if category_filtered:
+            retrieval_pool = category_filtered
+        elif hard_matches:
+            retrieval_pool = hard_matches
+
     candidate_source = retrieval_pool if retrieval_query else hard_matches
     if hard_matches and not prompt_busca and not prompt_contexto and not perfil_cliente and not vehicle_focus and not prompt_apresentacao:
         candidate_source = hard_matches
+    if broadening_search and hard_matches:
+        candidate_source = hard_matches
+    if effective_tipo_veiculo and hard_matches:
+        candidate_source = [v for v in candidate_source if _vehicle_matches_category(v, effective_tipo_veiculo)] or hard_matches
+
+    has_hard_constraints = any(
+        [
+            effective_faixa_preco,
+            effective_ano_minimo is not None,
+            effective_ano_maximo is not None,
+            effective_km_maximo is not None,
+            effective_cambio,
+            effective_marca,
+        ]
+    )
+    sort_reference = resolved_reference or focus_reference_hint
+    if effective_prefer or sort_reference:
+        candidate_source = _sort_inventory_results(
+            candidate_source,
+            search_term=search_term,
+            prefer=effective_prefer,
+            reference_vehicle=sort_reference,
+        )
+
+    if has_hard_constraints or resolved_reference:
+        hard_filtered = _filter_inventory(
+            inventory=candidate_source,
+            search_term="",
+            faixa_preco=effective_faixa_preco,
+            tipo_veiculo=None,
+            ano_minimo=effective_ano_minimo,
+            ano_maximo=effective_ano_maximo,
+            km_maximo=effective_km_maximo,
+            cambio=effective_cambio,
+            reference_vehicle=resolved_reference,
+            marca=effective_marca,
+        )
+        if hard_filtered:
+            candidate_source = hard_filtered
+        elif hard_matches:
+            candidate_source = hard_matches
+        else:
+            candidate_source = []
 
     llm_selection = _rank_inventory_with_llm(
         search_brief=search_brief or retrieval_query,
@@ -1236,9 +1490,12 @@ def consultar_estoque(
             for key in (llm_selection.get("selected_vehicle_keys") or [])
             if str(key).strip()
         ]
+        raw_reasons = llm_selection.get("alternative_reasoning") or {}
+        if not isinstance(raw_reasons, dict):
+            raw_reasons = {}
         reasons = {
             str(key).strip().lower(): str(value)
-            for key, value in (llm_selection.get("alternative_reasoning") or {}).items()
+            for key, value in raw_reasons.items()
             if str(key).strip()
         }
 
@@ -1328,6 +1585,8 @@ def consultar_estoque(
                 "faixa_preco": effective_faixa_preco,
                 "tipo_veiculo": effective_tipo_veiculo,
                 "ano_minimo": effective_ano_minimo,
+                "ano_maximo": effective_ano_maximo,
+                "km_maximo": effective_km_maximo,
                 "cambio": effective_cambio,
                 "reference_vehicle": effective_reference_vehicle,
                 "prefer": effective_prefer,
@@ -1370,6 +1629,8 @@ def consultar_estoque(
                         "faixa_preco": effective_faixa_preco,
                         "tipo_veiculo": effective_tipo_veiculo,
                         "ano_minimo": effective_ano_minimo,
+                        "ano_maximo": effective_ano_maximo,
+                        "km_maximo": effective_km_maximo,
                         "cambio": effective_cambio,
                     },
                 },

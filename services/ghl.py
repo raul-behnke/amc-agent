@@ -55,6 +55,13 @@ def _ghl_request_sync(method: str, path: str, **kwargs: Any) -> dict:
             headers=_ghl_headers(version=version),
             **kwargs,
         )
+        if response.status_code >= 400:
+            logger.error(
+                "GHL erro {code} | path={path} | body={body}",
+                code=response.status_code,
+                path=path,
+                body=response.text,
+            )
         response.raise_for_status()
         return response.json()
 
@@ -63,7 +70,7 @@ def _parse_inventory_response(data: dict) -> list[dict]:
     """Extrai a lista de veículos do response da API."""
     raw_value = data.get("customValue", {}).get("value", "{}")
     inventory = json.loads(raw_value)
-    vehicles = inventory.get("vehicles", [])
+    vehicles = inventory.get("veiculos") or inventory.get("vehicles") or []
     logger.info("Estoque carregado | total={total}", total=len(vehicles))
     return vehicles
 

@@ -279,6 +279,64 @@ class ProcessMessageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["attachments"], ["https://img/gol/1.jpg"])
         self.assertEqual(_lead_states[session_id].vehicle_journey.photo_target, "Volkswagen Gol 1.6")
 
+    async def test_process_message_nao_detecta_veiculo_em_mensagem_pura_de_agendamento(self):
+        fake_agent = SimpleNamespace(arun=AsyncMock(return_value=SimpleNamespace(content="Resposta do agente")))
+
+        with patch("runtime.orchestrator.create_lucas_agent", return_value=fake_agent), patch(
+            "runtime.orchestrator.get_messages_async",
+            new=AsyncMock(return_value=[]),
+        ), patch(
+            "runtime.orchestrator.extract_intent_from_message",
+            return_value=SimpleNamespace(
+                is_asking_for_vehicle=False,
+                vehicle_query=None,
+                is_asking_for_photos=False,
+                is_accepting_info=False,
+                wants_human=False,
+                visit_intent=True,
+                qualification_facts=SimpleNamespace(model_dump=lambda exclude_none=True: {}),
+            ),
+        ), patch(
+            "runtime.orchestrator.detect_vehicle_mentions",
+            return_value=["Ford Ka"],
+        ) as detect_mock:
+            await process_message(
+                session_id="sessao-agenda-pura",
+                user_message="Posso passar sábado perto do meio dia?",
+                conversation_id="conv-321",
+            )
+
+        detect_mock.assert_not_called()
+        called_input = fake_agent.arun.await_args.kwargs["input"]
+        self.assertIn("SINAL_DE_VISITA_DETECTADO=True", called_input)
+
+    async def test_process_message_injeta_preferencia_por_whatsapp(self):
+        fake_agent = SimpleNamespace(arun=AsyncMock(return_value=SimpleNamespace(content="Resposta do agente")))
+
+        with patch("runtime.orchestrator.create_lucas_agent", return_value=fake_agent), patch(
+            "runtime.orchestrator.get_messages_async",
+            new=AsyncMock(return_value=[]),
+        ), patch(
+            "runtime.orchestrator.extract_intent_from_message",
+            return_value=SimpleNamespace(
+                is_asking_for_vehicle=False,
+                vehicle_query=None,
+                is_asking_for_photos=False,
+                is_accepting_info=False,
+                wants_human=False,
+                visit_intent=False,
+                qualification_facts=SimpleNamespace(model_dump=lambda exclude_none=True: {}),
+            ),
+        ):
+            await process_message(
+                session_id="sessao-whatsapp",
+                user_message="Prefiro continuar pelo WhatsApp sem agendar agora",
+                conversation_id="conv-654",
+            )
+
+        called_input = fake_agent.arun.await_args.kwargs["input"]
+        self.assertIn("PREFERENCIA_WHATSAPP_DETECTADA=True", called_input)
+
     async def test_process_message_prioriza_veiculo_citado_no_turno_sobre_saudacao(self):
         session_id = "sessao-troca-foco"
         registrar_qualificacao(session_id=session_id, veiculo_interesse="Honda CR-V")

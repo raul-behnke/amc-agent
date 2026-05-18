@@ -46,10 +46,12 @@ app = FastAPI(
 from api.webhooks.chat import router as chat_router  # noqa: E402
 from api.webhooks.leads import router as leads_router  # noqa: E402
 from api.scenario_tests import router as scenario_tests_router  # noqa: E402
+from api.admin import router as admin_router  # noqa: E402
 
 app.include_router(chat_router)
 app.include_router(leads_router)
 app.include_router(scenario_tests_router)
+app.include_router(admin_router)
 app.mount("/artifacts", StaticFiles(directory=ROOT_DIR / "tests" / "results"), name="artifacts")
 
 

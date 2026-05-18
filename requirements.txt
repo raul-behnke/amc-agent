@@ -1,11 +1,9 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
 pydantic-settings
 agno
 sqlalchemy
-psycopg2-binary
-redis
 python-dotenv
 openai
 loguru
