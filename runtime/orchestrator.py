@@ -9,6 +9,7 @@ Responsável por:
 """
 
 
+import asyncio
 import json
 import re
 
@@ -22,6 +23,20 @@ from services.ghl import get_messages_async
 from tools.qualification import _get_lead, registrar_qualificacao, registrar_estado
 from tools.inventory import consultar_estoque, detect_vehicle_mentions, get_vehicle_photo_urls, resolve_vehicle_target
 from runtime.intent_extractor import extract_intent_from_message
+
+# Serializa o processamento por sessão para evitar respostas duplicadas
+# quando o lead envia várias mensagens em sequência rápida.
+_session_locks: dict[str, asyncio.Lock] = {}
+_session_locks_guard = asyncio.Lock()
+
+
+async def _get_session_lock(session_id: str) -> asyncio.Lock:
+    async with _session_locks_guard:
+        lock = _session_locks.get(session_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _session_locks[session_id] = lock
+        return lock
 
 INITIAL_GREETING_MARKER = "[SAUDAÇÃO INICIAL]"
 PHOTO_PROMISE_PATTERNS = (
@@ -269,6 +284,28 @@ def _normalize_title(value: str) -> str:
     return " ".join(str(value or "").lower().split())
 
 
+GENERIC_CATEGORY_QUERIES = {
+    "sedan", "sedã", "sedans", "sedãs",
+    "suv", "suvs",
+    "hatch", "hatchback", "hatches",
+    "picape", "picapes", "pickup", "pick-up",
+    "caminhonete", "caminhonetes",
+    "carro", "carros", "veiculo", "veículo", "veiculos", "veículos",
+    "compacto", "compactos",
+    "automatico", "automático", "automaticos", "automáticos",
+    "familia", "família",
+    "uber", "app",
+}
+
+
+def _is_generic_category_query(search_query: str) -> bool:
+    """True quando o lead pediu apenas categoria genérica, sem modelo específico."""
+    normalized = " ".join((search_query or "").lower().strip().split())
+    if not normalized:
+        return False
+    return normalized in GENERIC_CATEGORY_QUERIES
+
+
 def _build_stock_injection(
     filtered_payload: dict | None,
     search_query: str,
@@ -316,6 +353,13 @@ def _build_stock_injection(
         return (
             f"O SISTEMA ENCONTROU {len(matches)} UNIDADES DE '{search_query}' NO ESTOQUE. "
             f"APRESENTE TODAS AS OPÇÕES DESTE MODELO.\n{filtered_json}"
+        )
+
+    if _is_generic_category_query(search_query):
+        return (
+            f"O SISTEMA BUSCOU POR CATEGORIA '{search_query}' E SEPAROU {len(matches)} OPÇÕES DA NOSSA LINHA. "
+            f"O LEAD NÃO PEDIU MODELO ESPECÍFICO — NÃO DIGA QUE 'NÃO TEMOS O MODELO ESPECÍFICO'. "
+            f"APRESENTE AS OPÇÕES DE FORMA AFIRMATIVA (ex: 'Separei estas opções de {search_query}').\n{filtered_json}"
         )
 
     return (
@@ -413,6 +457,26 @@ async def process_message(
     """
     logger.info("Processando mensagem | session={session}", session=session_id)
 
+    lock = await _get_session_lock(session_id)
+    if lock.locked():
+        logger.info("Aguardando lock de sessão | session={session}", session=session_id)
+    async with lock:
+        return await _process_message_locked(
+            session_id=session_id,
+            user_message=user_message,
+            user_id=user_id,
+            contact_id=contact_id,
+            conversation_id=conversation_id,
+        )
+
+
+async def _process_message_locked(
+    session_id: str,
+    user_message: str,
+    user_id: str | None = None,
+    contact_id: str | None = None,
+    conversation_id: str | None = None,
+) -> dict:
     if user_message.startswith(INITIAL_GREETING_MARKER):
         agent_reply = _build_initial_greeting(user_message)
         logger.info("Saudação inicial determinística | session={session}", session=session_id)
