@@ -23,6 +23,31 @@ from services.ghl import get_messages_async
 from tools.qualification import _get_lead, registrar_qualificacao, registrar_estado
 from tools.inventory import consultar_estoque, detect_vehicle_mentions, get_vehicle_photo_urls, resolve_vehicle_target
 from runtime.intent_extractor import extract_intent_from_message
+from runtime.inventory_intent_classifier import classify_inventory_search_intent
+
+CATEGORY_TOKEN_MAP = {
+    "sedan": "sedã", "sedã": "sedã", "sedans": "sedã", "sedãs": "sedã",
+    "suv": "SUV", "suvs": "SUV",
+    "hatch": "hatch", "hatchback": "hatch", "hatches": "hatch",
+    "picape": "picape", "picapes": "picape", "pickup": "picape", "pick-up": "picape",
+    "caminhonete": "picape", "caminhonetes": "picape",
+}
+
+EXPANSION_INTENTS = {
+    "category_expansion",
+    "budget_expansion",
+    "preference_shift",
+    "same_model_options",
+    "general_recommendation",
+}
+
+
+def _extract_category_from_text(text: str) -> str | None:
+    lowered = (text or "").lower()
+    for token, canonical in CATEGORY_TOKEN_MAP.items():
+        if re.search(rf"\b{re.escape(token)}\b", lowered):
+            return canonical
+    return None
 
 # Serializa o processamento por sessão para evitar respostas duplicadas
 # quando o lead envia várias mensagens em sequência rápida.
@@ -330,10 +355,10 @@ def _build_stock_injection(
         match_titles.discard("")
         if match_titles and match_titles.issubset(already_presented_titles):
             return (
-                f"O SISTEMA REVERIFICOU '{search_query}': segue disponível e os dados não mudaram. "
-                f"ESTE(S) VEÍCULO(S) JÁ FORAM APRESENTADOS AO LEAD. NÃO reapresente o card nem repita "
-                f"ano/km/câmbio/valor. O lead está apenas respondendo perguntas — apenas continue a "
-                f"qualificação de onde parou."
+                f"O SISTEMA REVERIFICOU '{search_query}': os veículos retornados já foram apresentados ao lead. "
+                f"NÃO reapresente o card. Se o lead pediu MAIS opções/expansão, seja consultivo: reconheça "
+                f"o que já mostrou e proponha ampliar critérios (outra faixa de preço, marca, ou perguntar "
+                f"o que ele prioriza). NÃO diga 'não temos outras opções' de forma terminal — explore primeiro."
             )
 
     filtered_json = json.dumps(filtered_payload, ensure_ascii=False)
@@ -619,6 +644,39 @@ async def _process_message_locked(
             }
             already_presented_titles.discard("")
 
+            presented_vehicles_payload = [
+                {
+                    "vehicle_key": v.vehicle_key,
+                    "titulo": v.titulo,
+                }
+                for v in lead_ctx.vehicle_journey.presented_vehicles
+                if (v.vehicle_key or v.titulo)
+            ]
+            presented_keys = [
+                v.vehicle_key
+                for v in lead_ctx.vehicle_journey.presented_vehicles
+                if v.vehicle_key
+            ]
+
+            try:
+                search_intent_obj = classify_inventory_search_intent(
+                    lead_message=input_text,
+                    presented_vehicles=presented_vehicles_payload,
+                    context_vehicle=lead_ctx.vehicle_journey.current_focus,
+                )
+            except Exception as exc:
+                logger.warning("Falha no classificador de intenção de busca: {err}", err=str(exc))
+                search_intent_obj = None
+
+            category_token = _extract_category_from_text(input_text)
+            if (
+                search_intent_obj
+                and search_intent_obj.search_intent == "category_expansion"
+                and category_token
+            ):
+                search_queries = [category_token]
+                primary_turn_query = category_token
+
             perfil_parts = []
             if lead_ctx.faixa_preco:
                 perfil_parts.append(f"orçamento: {lead_ctx.faixa_preco}")
@@ -639,13 +697,71 @@ async def _process_message_locked(
                     trigger=("vehicle_ask" if intent.is_asking_for_vehicle else "acceptance"),
                     query=search_query,
                 )
+                is_expansion = bool(
+                    search_intent_obj
+                    and search_intent_obj.search_intent in EXPANSION_INTENTS
+                )
+                effective_limite = 6 if is_expansion else 3
+                effective_modo = "alternatives" if is_expansion else "discovery"
+                effective_exclude_presented = (
+                    search_intent_obj.exclude_presented if search_intent_obj else None
+                )
+                effective_use_focus = (
+                    search_intent_obj.use_vehicle_focus_as_filter
+                    if search_intent_obj
+                    else True
+                )
+                effective_vehicle_focus = (
+                    lead_ctx.vehicle_journey.current_focus if effective_use_focus else None
+                )
+                ignorados = presented_keys if effective_exclude_presented else None
+
                 estoque_raw = consultar_estoque(
                     prompt_busca=search_query,
-                    modo="discovery",
-                    limite=3,
+                    modo=effective_modo,
+                    limite=effective_limite,
                     perfil_cliente=perfil_cliente,
+                    vehicle_focus=effective_vehicle_focus,
+                    presented_vehicles=presented_vehicles_payload or None,
+                    search_intent=search_intent_obj.search_intent if search_intent_obj else None,
+                    search_scope=search_intent_obj.scope if search_intent_obj else None,
+                    exclude_presented=effective_exclude_presented,
+                    veiculos_ignorados=ignorados,
                 )
                 filtered_payload = _filter_stock_payload(estoque_raw, search_query)
+
+                # Fallback: se for expansão e tudo que veio já foi apresentado,
+                # tente de novo forçando exclusão dos já mostrados.
+                if (
+                    is_expansion
+                    and filtered_payload
+                    and presented_keys
+                    and not effective_exclude_presented
+                ):
+                    matches_now = filtered_payload.get("matches") or []
+                    titles_now = {
+                        _normalize_title(m.get("titulo") or m.get("modelo"))
+                        for m in matches_now
+                    }
+                    titles_now.discard("")
+                    if titles_now and titles_now.issubset(already_presented_titles):
+                        logger.info(
+                            "Expansão sem diversidade — refazendo busca excluindo apresentados"
+                        )
+                        estoque_raw = consultar_estoque(
+                            prompt_busca=search_query,
+                            modo="alternatives",
+                            limite=8,
+                            perfil_cliente=perfil_cliente,
+                            vehicle_focus=None,
+                            presented_vehicles=presented_vehicles_payload or None,
+                            search_intent=search_intent_obj.search_intent if search_intent_obj else None,
+                            search_scope=search_intent_obj.scope if search_intent_obj else None,
+                            exclude_presented=True,
+                            veiculos_ignorados=presented_keys,
+                        )
+                        filtered_payload = _filter_stock_payload(estoque_raw, search_query)
+
                 system_injections.append(
                     _build_stock_injection(
                         filtered_payload, search_query, estoque_raw, already_presented_titles
