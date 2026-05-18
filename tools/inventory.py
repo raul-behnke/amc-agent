@@ -1025,6 +1025,13 @@ def _rank_inventory_with_llm(
     candidates: list[dict[str, Any]],
     limite: int,
     forced_mode: str | None = None,
+    # Sprint 4: Parâmetros de contexto
+    presented_vehicles: list[dict] | None = None,
+    search_intent: str | None = None,
+    search_scope: str | None = None,
+    context_vehicle: str | None = None,
+    exclude_presented: bool | None = None,
+    lead_message: str = "",
 ) -> dict[str, Any] | None:
     if os.getenv("INVENTORY_USE_LLM", "1").lower() not in {"1", "true", "yes", "on"}:
         return None
@@ -1072,6 +1079,60 @@ def _rank_inventory_with_llm(
         "\n"
         "REGRA DE FOCO: O campo VEHICLE_FOCUS no briefing é contexto histórico (modelo que o lead já viu/foi tagged), NÃO é um filtro. Se o lead está pedindo CATEGORIA AMPLA ('outros sedans', 'que SUVs têm', 'me mostra hatches'), ignore VEHICLE_FOCUS e selecione variedade dentro da categoria. Só use VEHICLE_FOCUS como peso forte quando o briefing claramente pedir refinamento daquele veículo específico.\n"
         "\n"
+        # Sprint 4 & 5: Instrução de repetição e diversidade
+        "REGRAS DE REPETIÇÃO E DIVERSIDADE:\n"
+        "Você receberá uma lista de presented_vehicles — veículos que já foram mostrados ao lead.\n"
+        "\n"
+        "Regra geral: EVITE repetir veículos já apresentados, a menos que o lead peça explicitamente.\n"
+        "\n"
+        "Quando search_intent = category_expansion:\n"
+        "- Priorize DIVERSIDADE de modelos\n"
+        "- Evite repetir os mesmos modelos apresentados, se possível\n"
+        "- Se não houver alternativa suficiente, pode incluir alguns repetidos mas com explicação honesta\n"
+        "\n"
+        "Quando search_intent = return_to_presented_vehicle:\n"
+        "- Priorize o veículo específico referenciado em context_vehicle\n"
+        "- Não faça nova busca ampla\n"
+        "- Foque naquele veículo (detalhes, fotos, etc.)\n"
+        "\n"
+        "Quando search_intent = same_model_options:\n"
+        "- Foque no mesmo modelo (ex: Sentra) com diferentes versões/anos\n"
+        "- Pode repetir o modelo Sentra, mas evite o MESMO veículo (mesmo key)\n"
+        "- Se houver 2+ versões/anos, mostre diversidade\n"
+        "\n"
+        "Quando search_intent = same_vehicle_info:\n"
+        "- Foco no veículo atual/context_vehicle\n"
+        "- Não selecione outros veículos\n"
+        "\n"
+        "DIVERSIDADE INTELIGENTE — DECISÃO COMERCIAL:\n"
+        "Quando o lead pediu OPÇÕES MAIS AMPLAS (category_expansion, budget_expansion, general_recommendation):\n"
+        "- Mostre DIVERSIDADE de modelos quando possível\n"
+        "- Evite mostrar 3 variações do mesmo modelo se você pode mostrar 3 modelos diferentes\n"
+        "- Considere: modelos diferentes, faixas de preço, anos, características\n"
+        "- Se o lead mencionou preferência (mais novo, menos km), equilibre: atenda preferência mas mostre alguma diversidade ainda assim\n"
+        "\n"
+        "Quando o lead pediu PREFERÊNCIA ESPECÍFICA (preference_shift, budget_expansion com prefer):\n"
+        "- Ordene/Selecione para atender a preferência PRINCIPAL\n"
+        "- 'Mais novo' → priorize ano descendente\n"
+        "- 'Menos km' → priorize km ascendente\n"
+        "- 'Mais barato' → priorize preço ascendente\n"
+        "- Ainda assim, mostre alguma diversidade se possível\n"
+        "\n"
+        "Quando o lead gostou de um veículo e pediu 'ALGO PARECIDO':\n"
+        "- Mostre opções similares sem repetir o MESMO veículo\n"
+        "- Critérios de similaridade: preço (±20%), ano (±2 anos), categoria, câmbio\n"
+        "- Priorize similaridade em PRINCIPAL, diversidade em SECUNDÁRIO\n"
+        "\n"
+        "EXCEÇÃO: Se NÃO houver diversidade possível:\n"
+        "- Você pode mostrar variações do mesmo modelo (diferentes anos/versões)\n"
+        "- Mas explique honestamente: 'Encontrei essas versões/anos disponíveis'\n"
+        "\n"
+        "EXCEÇÃO: Se o lead pediu EXPLICITAMENTE repetição:\n"
+        "- 'Me mostra de novo aquele carro'\n"
+        "- 'Quero ver o Sentra de novo'\n"
+        "- Nesse caso, repetir é CORRETO e esperado\n"
+        "\n"
+        # Fim Sprint 4 & 5
         "REGRAS DE HEADLINE:\n"
         "- NUNCA diga 'não temos o modelo específico' ou 'não encontramos o modelo X' se o briefing NÃO mencionar um modelo específico (ex: 'Honda Civic 2020'). Pedidos genéricos por categoria (SUV, sedan, hatch) ou semânticos ('pra família', 'pra Uber') NÃO são pedidos por modelo.\n"
         "- Se o lead pediu categoria genérica e há matches da categoria certa, headline deve ser afirmativo: 'Separei essas opções de SUV que temos no estoque' ou similar. NÃO use 'mas' ou 'porém' como se estivesse decepcionando o cliente.\n"
@@ -1083,6 +1144,13 @@ def _rank_inventory_with_llm(
         "briefing": search_brief,
         "forced_mode": forced_mode,
         "limit": limite,
+        # Sprint 4: Contexto para o LLM
+        "presented_vehicles": presented_vehicles or [],
+        "search_intent": search_intent,
+        "search_scope": search_scope,
+        "context_vehicle": context_vehicle,
+        "exclude_presented": exclude_presented if exclude_presented is not None else False,
+        "lead_message": lead_message,
         "candidates": payload_candidates,
         "schema": {
             "response_mode": "single|alternatives|confirm|vehicle_info",
@@ -1225,6 +1293,12 @@ def consultar_estoque(
     modo: str | None = None,
     limite: int = 5,
     veiculos_ignorados: list[Any] | None = None,
+    # Sprint 4: Parâmetros de contexto para o LLM
+    presented_vehicles: list[dict] | None = None,
+    search_intent: str | None = None,
+    search_scope: str | None = None,
+    context_vehicle: str | None = None,
+    exclude_presented: bool | None = None,
 ) -> str:
     """
     Consulta o estoque real da AMC Veículos e devolve resultado estruturado.
@@ -1473,6 +1547,13 @@ def consultar_estoque(
         candidates=candidate_source or hard_matches,
         limite=limite,
         forced_mode=effective_mode,
+        # Sprint 4: Contexto para o LLM decidir
+        presented_vehicles=presented_vehicles,
+        search_intent=search_intent,
+        search_scope=search_scope,
+        context_vehicle=context_vehicle,
+        exclude_presented=exclude_presented,
+        lead_message=prompt_busca or "",
     )
 
     selected_keys: list[str] = []
@@ -1600,6 +1681,12 @@ def consultar_estoque(
                 "veiculos_ignorados": veiculos_ignorados,
                 "search_term": search_term,
                 "planner_filters": planned_filters or None,
+                # Sprint 4 & 8: Logs de contexto e busca
+                "search_intent": search_intent,
+                "search_scope": search_scope,
+                "context_vehicle": context_vehicle,
+                "presented_vehicles_count": len(presented_vehicles) if presented_vehicles else 0,
+                "candidate_count_before_llm": len(candidate_source or hard_matches),
             },
             "count": len(serialized_matches),
             "matches": serialized_matches,
