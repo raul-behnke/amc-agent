@@ -24,6 +24,44 @@ from tools.inventory import consultar_estoque, detect_vehicle_mentions, get_vehi
 from runtime.intent_extractor import extract_intent_from_message
 
 INITIAL_GREETING_MARKER = "[SAUDAÇÃO INICIAL]"
+PHOTO_PROMISE_PATTERNS = (
+    "te mando as fotos",
+    "te mando umas fotos",
+    "te mando foto",
+    "mando as fotos",
+    "mando umas fotos",
+    "mando foto",
+    "vou mandar as fotos",
+    "vou mandar foto",
+    "vou te mandar",
+    "ja te envio",
+    "já te envio",
+    "ja envio",
+    "já envio",
+    "envio depois",
+    "envio quando",
+    "mando depois",
+    "mando quando",
+    "mando assim que",
+    "te envio as fotos",
+    "te envio foto",
+    "encaminho as fotos",
+    "encaminho foto",
+    "to enviando",
+    "tô enviando",
+    "estou enviando",
+    "ja mandei",
+    "já mandei",
+)
+
+
+def _detect_photo_promise(text: str) -> bool:
+    normalized = _normalize_vehicle_text(text)
+    if not normalized:
+        return False
+    return any(p in normalized for p in PHOTO_PROMISE_PATTERNS)
+
+
 WHATSAPP_CONTINUATION_PATTERNS = (
     "continuar pelo whatsapp",
     "seguir pelo whatsapp",
@@ -227,13 +265,39 @@ def _filter_stock_payload(estoque_raw: str, search_query: str) -> dict | None:
     return filtered
 
 
-def _build_stock_injection(filtered_payload: dict | None, search_query: str, fallback_raw: str) -> str:
+def _normalize_title(value: str) -> str:
+    return " ".join(str(value or "").lower().split())
+
+
+def _build_stock_injection(
+    filtered_payload: dict | None,
+    search_query: str,
+    fallback_raw: str,
+    already_presented_titles: set[str] | None = None,
+) -> str:
     if not filtered_payload:
         return f"O SISTEMA BUSCOU ESTOQUE PARA '{search_query}'. RESULTADO:\n{fallback_raw}"
 
     matches = filtered_payload.get("matches", [])
     if not matches:
         return f"O SISTEMA BUSCOU ESTOQUE PARA '{search_query}'. NENHUM VEÍCULO ENCONTRADO."
+
+    # Suppress re-presentation: if every match was already shown to the lead, don't
+    # re-inject the card. The lead is just answering questions, not asking to see it again.
+    already_presented_titles = already_presented_titles or set()
+    if already_presented_titles:
+        match_titles = {
+            _normalize_title(item.get("titulo") or item.get("modelo"))
+            for item in matches
+        }
+        match_titles.discard("")
+        if match_titles and match_titles.issubset(already_presented_titles):
+            return (
+                f"O SISTEMA REVERIFICOU '{search_query}': segue disponível e os dados não mudaram. "
+                f"ESTE(S) VEÍCULO(S) JÁ FORAM APRESENTADOS AO LEAD. NÃO reapresente o card nem repita "
+                f"ano/km/câmbio/valor. O lead está apenas respondendo perguntas — apenas continue a "
+                f"qualificação de onde parou."
+            )
 
     filtered_json = json.dumps(filtered_payload, ensure_ascii=False)
     if len(matches) == 1:
@@ -403,10 +467,31 @@ async def process_message(
             logger.warning("Fato 'nome: Lucas' ignorado por ser o nome do agente.")
             facts.pop("nome")
 
+        # Failsafe determinístico: se o lead prometeu mandar fotos, força a flag
+        # mesmo que o extractor LLM não capture (evita ciclo de re-pedido de fotos).
+        lead_existing = _get_lead(session_id)
+        if (
+            lead_existing.tem_troca is True
+            and lead_existing.fotos_troca_recebidas is not True
+            and _detect_photo_promise(input_text)
+        ):
+            facts["fotos_troca_recebidas"] = True
+            logger.info("Promessa de fotos de troca detectada deterministicamente.")
+
         if facts:
             logger.info(f"Fatos extraídos: {facts}")
             registrar_qualificacao(session_id=session_id, **facts)
             system_injections.append(f"O SISTEMA IDENTIFICOU E SALVOU FATOS NOVOS: {json.dumps(facts, ensure_ascii=False)}")
+
+        # Barreira anti-repetição: se fotos já foram tratadas, bloqueia novo pedido.
+        lead_after_facts = _get_lead(session_id)
+        if lead_after_facts.fotos_troca_recebidas is True:
+            system_injections.append(
+                "FOTOS_TROCA_JA_TRATADAS=True — O lead JÁ enviou ou JÁ prometeu enviar as fotos do carro de troca. "
+                "PROIBIDO pedir fotos do veículo de troca neste turno e nos próximos. "
+                "Apenas valide brevemente ('Perfeito, fico no aguardo') e avance para a próxima etapa. "
+                "NUNCA repita pedido de fotos do carro do cliente."
+            )
 
         visit_intent = bool(getattr(intent, "visit_intent", False))
 
@@ -463,6 +548,13 @@ async def process_message(
             seen_queries: set[str] = set()
             primary_turn_query = search_queries[0] if search_queries else None
 
+            already_presented_titles = {
+                _normalize_title(v.titulo)
+                for v in lead_ctx.vehicle_journey.presented_vehicles
+                if v.titulo
+            }
+            already_presented_titles.discard("")
+
             perfil_parts = []
             if lead_ctx.faixa_preco:
                 perfil_parts.append(f"orçamento: {lead_ctx.faixa_preco}")
@@ -490,7 +582,11 @@ async def process_message(
                     perfil_cliente=perfil_cliente,
                 )
                 filtered_payload = _filter_stock_payload(estoque_raw, search_query)
-                system_injections.append(_build_stock_injection(filtered_payload, search_query, estoque_raw))
+                system_injections.append(
+                    _build_stock_injection(
+                        filtered_payload, search_query, estoque_raw, already_presented_titles
+                    )
+                )
 
                 if filtered_payload:
                     presented_vehicles = filtered_payload.get("matches") or []

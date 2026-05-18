@@ -197,7 +197,7 @@ def agendar_visita(
             ensure_ascii=False,
         )
 
-    logger.info("Realizando agendamento GHL | lead={n}", n=nome)
+    logger.info("Realizando agendamento GHL | lead={n} | data_hora_iso={d} | contact_id={c}", n=nome, d=data_hora_iso, c=contact_id)
     end_time_iso = data_hora_iso
     try:
         end_time_iso = (requested_dt + timedelta(hours=1)).isoformat()
@@ -218,6 +218,7 @@ def agendar_visita(
     if telefone:
         payload["phone"] = telefone
 
+    logger.info("Payload agendamento GHL | payload={p}", p=payload)
     try:
         response = _ghl_request_sync(
             "POST",

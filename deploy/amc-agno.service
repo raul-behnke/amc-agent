@@ -1,0 +1,18 @@
+[Unit]
+Description=AMC Agno (Lucas SDR) FastAPI webhook service
+After=network.target
+
+[Service]
+Type=simple
+User=amcagent
+Group=amcagent
+WorkingDirectory=/opt/amc-agno/current
+EnvironmentFile=/opt/amc-agno/shared/.env
+ExecStart=/opt/amc-agno/shared/.venv/bin/uvicorn api.main:app --host 127.0.0.1 --port 8322
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/amc-agno/app.log
+StandardError=append:/var/log/amc-agno/error.log
+
+[Install]
+WantedBy=multi-user.target

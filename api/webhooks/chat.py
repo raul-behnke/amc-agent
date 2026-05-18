@@ -3,11 +3,32 @@ Webhook de Chat — Endpoint principal para receber mensagens de leads.
 """
 
 import asyncio
+import hashlib
 import os
 import re
+import time
 from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Request
 from loguru import logger
+
+_RECENT_WEBHOOKS: dict[str, float] = {}
+_DEDUP_TTL_SECONDS = 8.0
+
+
+def _is_duplicate_webhook(session_id: str, raw_message: Any) -> bool:
+    """Idempotência: descarta reenvios do mesmo (session, mensagem) dentro de TTL curto."""
+    try:
+        payload = raw_message if isinstance(raw_message, str) else repr(raw_message)
+        key = hashlib.sha1(f"{session_id}::{payload}".encode("utf-8")).hexdigest()
+    except Exception:
+        return False
+    now = time.monotonic()
+    for k, ts in list(_RECENT_WEBHOOKS.items()):
+        if now - ts > _DEDUP_TTL_SECONDS:
+            _RECENT_WEBHOOKS.pop(k, None)
+    last = _RECENT_WEBHOOKS.get(key)
+    _RECENT_WEBHOOKS[key] = now
+    return last is not None and (now - last) <= _DEDUP_TTL_SECONDS
 
 from api.schemas import ChatResponse
 from runtime.orchestrator import process_message
@@ -243,7 +264,7 @@ async def _handle_greeting_webhook_background(
         logger.exception("Falha no webhook de saudação em background")
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/message", response_model=ChatResponse)
 async def chat_webhook(request: Request, background_tasks: BackgroundTasks) -> ChatResponse:
     """Endpoint principal de conversa."""
     try:
@@ -281,6 +302,13 @@ async def chat_webhook(request: Request, background_tasks: BackgroundTasks) -> C
     if not session_id or not raw_message:
         return ChatResponse(session_id="error", reply="Payload inválido", status="rejected")
 
+    if _is_duplicate_webhook(session_id, raw_message):
+        logger.warning(
+            "Webhook duplicado descartado | session={session}",
+            session=session_id,
+        )
+        return ChatResponse(session_id=session_id, reply="Duplicado.", status="duplicate")
+
     background_tasks.add_task(
         _handle_chat_webhook_background,
         session_id=session_id,
@@ -293,7 +321,7 @@ async def chat_webhook(request: Request, background_tasks: BackgroundTasks) -> C
     return ChatResponse(session_id=session_id, reply="Processando...", status="accepted")
 
 
-@router.post("/greeting", response_model=ChatResponse)
+@router.post("/message/saudacao", response_model=ChatResponse)
 async def greeting_webhook(request: Request, background_tasks: BackgroundTasks) -> ChatResponse:
     """Endpoint de Saudação Proativa."""
     try:

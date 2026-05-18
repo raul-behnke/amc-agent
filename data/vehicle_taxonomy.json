@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "generated_at": "2026-05-15T21:57:31.282522+00:00",
+  "source_count": 23,
+  "classified_count": 23,
+  "entries": {
+    "jeep|renegade": {
+      "marca": "Jeep",
+      "modelo": "Renegade",
+      "categoria": "suv",
+      "confidence": 1.0,
+      "notes": "Modelo SUV."
+    },
+    "citroen|c3": {
+      "marca": "Citroën",
+      "modelo": "C3",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "renault|fluence": {
+      "marca": "Renault",
+      "modelo": "Fluence",
+      "categoria": "sedan",
+      "confidence": 1.0,
+      "notes": "Modelo sedan."
+    },
+    "chevrolet|onix": {
+      "marca": "Chevrolet",
+      "modelo": "Onix",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "fiat|500": {
+      "marca": "Fiat",
+      "modelo": "500",
+      "categoria": "compacto",
+      "confidence": 0.9,
+      "notes": "Modelo pequeno que pode ser classificado como compacto."
+    },
+    "nissan|sentra": {
+      "marca": "Nissan",
+      "modelo": "Sentra",
+      "categoria": "sedan",
+      "confidence": 1.0,
+      "notes": "Modelo sedan."
+    },
+    "chevrolet|s10": {
+      "marca": "Chevrolet",
+      "modelo": "S10",
+      "categoria": "picape",
+      "confidence": 1.0,
+      "notes": "Modelo de picape."
+    },
+    "citroen|c4 cactus": {
+      "marca": "Citroën",
+      "modelo": "C4 Cactus",
+      "categoria": "suv",
+      "confidence": 1.0,
+      "notes": "Modelo SUV."
+    },
+    "volkswagen|gol": {
+      "marca": "Volkswagen",
+      "modelo": "Gol",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "volkswagen|crossfox": {
+      "marca": "Volkswagen",
+      "modelo": "Crossfox",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback com estilo crossover."
+    },
+    "fiat|mobi": {
+      "marca": "Fiat",
+      "modelo": "Mobi",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "volkswagen|golf": {
+      "marca": "Volkswagen",
+      "modelo": "Golf",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "fiat|uno": {
+      "marca": "Fiat",
+      "modelo": "Uno",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "ford|ecosport": {
+      "marca": "Ford",
+      "modelo": "EcoSport",
+      "categoria": "suv",
+      "confidence": 1.0,
+      "notes": "Modelo SUV."
+    },
+    "chevrolet|cruze": {
+      "marca": "Chevrolet",
+      "modelo": "Cruze",
+      "categoria": "sedan",
+      "confidence": 1.0,
+      "notes": "Modelo sedan."
+    },
+    "volkswagen|fox": {
+      "marca": "Volkswagen",
+      "modelo": "Fox",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "hyundai|hb20": {
+      "marca": "Hyundai",
+      "modelo": "HB20",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "honda|fit": {
+      "marca": "Honda",
+      "modelo": "Fit",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "chevrolet|ipanema": {
+      "marca": "Chevrolet",
+      "modelo": "Ipanema",
+      "categoria": "perua",
+      "confidence": 1.0,
+      "notes": "Modelo perua."
+    },
+    "peugeot|208": {
+      "marca": "Peugeot",
+      "modelo": "208",
+      "categoria": "hatch",
+      "confidence": 1.0,
+      "notes": "Modelo hatchback."
+    },
+    "volkswagen|up!": {
+      "marca": "Volkswagen",
+      "modelo": "Up!",
+      "categoria": "compacto",
+      "confidence": 0.9,
+      "notes": "Modelo pequeno, pode ser classificado como compacto."
+    },
+    "ford|edge": {
+      "marca": "Ford",
+      "modelo": "Edge",
+      "categoria": "suv",
+      "confidence": 1.0,
+      "notes": "Modelo SUV."
+    },
+    "honda|cr-v": {
+      "marca": "Honda",
+      "modelo": "CR-V",
+      "categoria": "suv",
+      "confidence": 1.0,
+      "notes": "Modelo SUV."
+    }
+  }
+}
