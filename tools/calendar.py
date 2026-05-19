@@ -198,7 +198,8 @@ def agendar_visita(
         )
 
     logger.info("Realizando agendamento GHL | lead={n} | data_hora_iso={d} | contact_id={c}", n=nome, d=data_hora_iso, c=contact_id)
-    end_time_iso = data_hora_iso
+    start_time_iso = requested_dt.isoformat()
+    end_time_iso = start_time_iso
     try:
         end_time_iso = (requested_dt + timedelta(hours=1)).isoformat()
     except ValueError:
@@ -207,7 +208,7 @@ def agendar_visita(
     payload = {
         "calendarId": calendar_id,
         "locationId": location_id,
-        "startTime": data_hora_iso,
+        "startTime": start_time_iso,
         "endTime": end_time_iso,
         "title": f"Visita AMC: {nome}",
         "contactId": contact_id,
